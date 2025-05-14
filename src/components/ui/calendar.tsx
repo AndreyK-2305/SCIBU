@@ -45,13 +45,13 @@ function Calendar({
           "size-8 p-0 font-normal aria-selected:opacity-100",
         ),
         day_range_start:
-          "day-range-start aria-selected:bg-red-500 aria-selected:text-neutral-50 dark:aria-selected:bg-neutral-50 dark:aria-selected:text-neutral-900",
+          "day-range-start aria-selected:bg-indigo-600 aria-selected:text-neutral-50 dark:aria-selected:bg-neutral-50 dark:aria-selected:text-neutral-900",
         day_range_end:
-          "day-range-end aria-selected:bg-red-500 aria-selected:text-neutral-50 dark:aria-selected:bg-neutral-50 dark:aria-selected:text-neutral-900",
+          "day-range-end aria-selected:bg-indigo-600 aria-selected:text-neutral-50 dark:aria-selected:bg-neutral-50 dark:aria-selected:text-neutral-900",
         day_selected:
-          "bg-red-500 text-neutral-50 hover:bg-red-500 hover:text-neutral-50 focus:bg-red-500 focus:text-neutral-50 dark:bg-neutral-50 dark:text-neutral-900 dark:hover:bg-neutral-50 dark:hover:text-neutral-900 dark:focus:bg-neutral-50 dark:focus:text-neutral-900",
+          "bg-indigo-600 text-neutral-50 hover:bg-indigo-600 hover:text-neutral-50 focus:bg-indigo-600 focus:text-neutral-50 dark:bg-neutral-50 dark:text-neutral-900 dark:hover:bg-neutral-50 dark:hover:text-neutral-900 dark:focus:bg-neutral-50 dark:focus:text-neutral-900",
         day_today:
-          "bg-red-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-50",
+          "bg-indigo-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-50",
         day_outside:
           "day-outside text-neutral-500 aria-selected:text-neutral-500 dark:text-neutral-400 dark:aria-selected:text-neutral-400",
         day_disabled: "text-neutral-500 opacity-50 dark:text-neutral-400",

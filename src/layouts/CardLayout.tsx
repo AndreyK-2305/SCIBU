@@ -1,7 +1,7 @@
 import { Outlet } from "react-router";
 
-import BackgroundImg from "@/assets/images/background.jpg";
-import FablabLogoImg from "@/assets/images/fablab-logo.jpg";
+import BackgroundImg from "@/assets/images/bienestar-bg.jpeg";
+import FablabLogoImg from "@/assets/images/bienestar-logo.jpg";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +22,7 @@ export default function CardLayout({
           alt="Background"
           className="fixed h-full w-full object-cover"
         />
-        <div className="fixed h-full w-full bg-red-500 opacity-50"></div>
+        <div className="fixed h-full w-full bg-purple-500 opacity-50"></div>
       </div>
 
       <Card>

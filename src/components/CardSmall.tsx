@@ -20,7 +20,7 @@ export default function CardSmall({
         <div className="flex items-center gap-4">
           <Icon
             icon="material-symbols:book-2-outline-rounded"
-            className="size-10 text-red-500"
+            className="size-10 text-indigo-600"
           />
 
           <span className="inline-flex flex-col gap-x-4 sm:flex-row sm:items-center">

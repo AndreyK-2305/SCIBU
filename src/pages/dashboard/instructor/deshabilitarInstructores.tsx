@@ -48,7 +48,7 @@ export const DisableInstructorModal: React.FC<Props> = ({
         <AlertDialogHeader>
           <AlertDialogTitle className="text-xl">
             ¿Está seguro que desea deshabilitar al instructor{" "}
-            <span className="font-bold text-red-600">{instructorName}</span>?
+            <span className="font-bold text-indigo-600">{instructorName}</span>?
           </AlertDialogTitle>
           <AlertDialogDescription className="text-base">
             Esta acción no se puede deshacer. El instructor será deshabilitado y
@@ -60,7 +60,7 @@ export const DisableInstructorModal: React.FC<Props> = ({
           <AlertDialogAction
             disabled={loading}
             onClick={handleDisable}
-            className="bg-red-600 hover:bg-red-700"
+            className="bg-indigo-600 hover:bg-indigo-700"
           >
             {loading ? "Deshabilitando..." : "Deshabilitar"}
           </AlertDialogAction>

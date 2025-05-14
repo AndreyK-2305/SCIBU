@@ -97,7 +97,7 @@ function FormLabel({
       data-slot="form-label"
       data-error={!!error}
       className={cn(
-        "data-[error=true]:text-red-500 dark:data-[error=true]:text-red-900",
+        "data-[error=true]:text-indigo-600 dark:data-[error=true]:text-indigo-900",
         className,
       )}
       htmlFor={formItemId}
@@ -153,7 +153,7 @@ function FormMessage({ className, ...props }: React.ComponentProps<"p">) {
     <p
       data-slot="form-message"
       id={formMessageId}
-      className={cn("text-sm text-red-500 dark:text-red-900", className)}
+      className={cn("text-sm text-indigo-600 dark:text-indigo-900", className)}
       {...props}
     >
       {body}

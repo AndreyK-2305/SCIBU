@@ -791,7 +791,7 @@ const FileUploadDropzone = React.forwardRef<
       {...dropzoneProps}
       ref={forwardedRef}
       className={cn(
-        "relative flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-red-500 bg-red-50 p-6 transition-colors outline-none select-none focus-visible:border-ring/50 data-[disabled]:pointer-events-none data-[dragging]:border-red-500 data-[invalid]:border-destructive data-[invalid]:ring-destructive/20",
+        "relative flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-indigo-600 bg-indigo-50 p-6 transition-colors outline-none select-none focus-visible:border-ring/50 data-[disabled]:pointer-events-none data-[dragging]:border-indigo-600 data-[invalid]:border-destructive data-[invalid]:ring-destructive/20",
         className,
       )}
       onClick={onClick}
@@ -808,10 +808,12 @@ const FileUploadDropzone = React.forwardRef<
         <>
           <Icon
             icon="material-symbols:upload-rounded"
-            className="size-16 text-red-500"
+            className="size-16 text-indigo-600"
           />
-          <span className="font-bold text-red-500">Arrastra archivos aqui</span>
-          <span className="text-sm text-red-500">O seleccionalos</span>
+          <span className="font-bold text-indigo-600">
+            Arrastra archivos aqui
+          </span>
+          <span className="text-sm text-indigo-600">O seleccionalos</span>
 
           <FileUploadTrigger asChild>
             <Button className="mt-2 w-fit">Seleccionar archivos</Button>
@@ -1008,7 +1010,7 @@ const FileUploadItem = React.forwardRef<HTMLDivElement, FileUploadItemProps>(
                 <Button variant="ghost" size="icon">
                   <Icon
                     icon="material-symbols:close-rounded"
-                    className="size-6 text-red-500"
+                    className="size-6 text-indigo-600"
                   ></Icon>
                 </Button>
               </FileUploadItemDelete>
@@ -1134,7 +1136,7 @@ const FileUploadItemPreview = React.forwardRef<
       {...previewProps}
       ref={forwardedRef}
       className={cn(
-        "relative flex size-8 shrink-0 items-center justify-center overflow-hidden bg-accent/50 text-red-500 [&>svg]:size-10",
+        "relative flex size-8 shrink-0 items-center justify-center overflow-hidden bg-accent/50 text-indigo-600 [&>svg]:size-10",
         className,
       )}
     >

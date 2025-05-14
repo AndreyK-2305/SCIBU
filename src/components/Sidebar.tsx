@@ -25,25 +25,31 @@ const navItems: NavItem[] = [
     icon: "material-symbols:database-outline",
     url: "datos-personales",
   },
-  { label: "Instructores", icon: "ph:chalkboard-teacher", url: "" },
   {
-    label: "Ofertas de Formación",
-    icon: "material-symbols:menu-book-outline-rounded",
-    url: "oferta-formacion",
+    label: "Servicios",
+    icon: "material-symbols:home-repair-service-outline",
+    url: "servicios",
   },
   {
-    label: "Ingreso al FabLab",
-    icon: "material-symbols:login-rounded",
-    url: "ingreso-fablab",
+    label: "Especialistas",
+    icon: "ph:users",
+    url: "especialistas",
   },
   {
-    label: "Asistencia Instructores",
-    icon: "material-symbols:list-alt-outline-rounded",
-    url: "",
+    label: "Horarios",
+    icon: "material-symbols:schedule",
+    url: "horarios",
   },
-  { label: "Certificados", icon: "lineicons:certificate-badge-1", url: "" },
-  { label: "Reportes", icon: "material-symbols:docs-outline-rounded", url: "" },
-  { label: "Datos", icon: "material-symbols:database-outline", url: "" },
+  {
+    label: "Citas",
+    icon: "material-symbols:calendar-month",
+    url: "citas",
+  },
+  {
+    label: "Datos",
+    icon: "material-symbols:database-outline",
+    url: "datos",
+  },
 ];
 
 export default function Sidebar() {
@@ -73,7 +79,7 @@ export default function Sidebar() {
 
       <aside
         className={cn(
-          "fixed top-0 left-0 z-10 w-full space-y-10 overflow-hidden bg-red-600 p-3 text-white transition-[height] lg:min-h-screen lg:transition-[width]",
+          "fixed top-0 left-0 z-10 w-full space-y-10 overflow-hidden bg-[#3730a3] p-3 text-white transition-[height] lg:min-h-screen lg:transition-[width]",
           collapsed && "h-16 lg:w-16",
           !collapsed && "h-screen lg:w-64",
         )}

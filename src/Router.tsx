@@ -1,22 +1,23 @@
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
 import { HashRouter, Routes, Route, Navigate } from "react-router";
 
 import ProtectedRoute from "@/components/ProtectedRoute";
 import CardLayout from "@/layouts/CardLayout";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import { MODE } from "@/lib/config";
+import SuperAdminSetup from "@/pages/SuperAdminSetup";
 import Action from "@/pages/auth/Action";
+import CompleteProfile from "@/pages/auth/CompleteProfile";
 import Login from "@/pages/auth/Login";
 import PasswordRecovery from "@/pages/auth/PasswordRecovery";
-import Home from "@/pages/dashboard/Home.tsx";
-import IngresoFablab from "@/pages/dashboard/ingreso-fablab/IngresoFablab";
-import OfertaFormacion from "@/pages/dashboard/oferta-formacion/OfertaFormacion";
-import OfertaFormacionDetails from "@/pages/dashboard/oferta-formacion/OfertaFormacionDetails";
-import Components from "@/pages/dev/Components.tsx";
-
-import "./index.css";
-import DatosPersonales from "./pages/dashboard/datos-personales/DatosPersonales";
+import Register from "@/pages/auth/Register";
+import Home from "@/pages/dashboard/Home";
+import Citas from "@/pages/dashboard/citas/Citas";
+import DatosPersonales from "@/pages/dashboard/datos-personales/DatosPersonales";
+import Datos from "@/pages/dashboard/datos/Datos";
+import Especialistas from "@/pages/dashboard/especialistas/Especialistas";
+import Horarios from "@/pages/dashboard/horarios/Horarios";
+import Servicios from "@/pages/dashboard/servicios/Servicios";
+import Components from "@/pages/dev/Components";
 
 export default function Router() {
   return (
@@ -33,13 +34,12 @@ export default function Router() {
           }
         >
           <Route index element={<Home />} />
-          <Route path="ingreso-fablab" element={<IngresoFablab />} />
-          <Route path="oferta-formacion" element={<OfertaFormacion />} />
-          <Route
-            path="oferta-formacion/:id"
-            element={<OfertaFormacionDetails />}
-          />
           <Route path="datos-personales" element={<DatosPersonales />} />
+          <Route path="servicios" element={<Servicios />} />
+          <Route path="especialistas" element={<Especialistas />} />
+          <Route path="horarios" element={<Horarios />} />
+          <Route path="citas" element={<Citas />} />
+          <Route path="datos" element={<Datos />} />
         </Route>
 
         <Route
@@ -53,9 +53,14 @@ export default function Router() {
         >
           <Route index element={<Navigate to="login" />} />
           <Route path="login" element={<Login />} />
+          <Route path="register" element={<Register />} />
           <Route path="password-recovery" element={<PasswordRecovery />} />
           <Route path="action" element={<Action />} />
+          <Route path="complete-profile" element={<CompleteProfile />} />
         </Route>
+
+        {/* Ruta oculta para configuración de administrador - acceso público para setup inicial */}
+        <Route path="admin-setup" element={<SuperAdminSetup />} />
 
         {MODE === "development" && (
           <Route path="dev/components" element={<Components />} />
@@ -64,9 +69,3 @@ export default function Router() {
     </HashRouter>
   );
 }
-
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <Router />
-  </StrictMode>,
-);

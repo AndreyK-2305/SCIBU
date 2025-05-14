@@ -59,7 +59,7 @@ export default function OfertaFormacion() {
               title={oferta.nombre}
               slotAction={
                 <Link to={String(oferta.id)}>
-                  <Button className="bg-red-500 text-white hover:bg-red-600">
+                  <Button className="bg-indigo-600 text-white hover:bg-indigo-700">
                     Ver
                   </Button>
                 </Link>

@@ -106,7 +106,7 @@ export default function MultiSelector<T>({
               variant="ghost"
               size="icon"
             >
-              <Icon icon="mdi:close" className="size-6 text-red-500" />
+              <Icon icon="mdi:close" className="size-6 text-purple-500" />
             </Button>
           </li>
         ))}

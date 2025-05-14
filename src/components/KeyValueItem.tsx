@@ -17,7 +17,7 @@ export function KeyValueItem({
 }: KeyValueItemProps) {
   return (
     <div className={cn("flex gap-4", className)}>
-      {icon && <Icon icon={icon} className="size-12 text-red-500" />}
+      {icon && <Icon icon={icon} className="size-12 text-indigo-600" />}
       <dl>
         <dt className="font-bold">{label}</dt>
         <dd>
