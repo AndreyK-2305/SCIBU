@@ -1,9 +1,14 @@
 import { Icon } from "@iconify/react";
+import { format } from "date-fns";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import React, { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { initializeLocalStorage } from "@/services/localStorage";
+import { db } from "@/lib/firebase";
+import { getAppointmentsByUserId } from "@/services/appointment";
+import { getUserData, UserData } from "@/services/user";
+import { Appointment } from "@/types/appointment";
 
 interface User {
   id: string;
@@ -12,123 +17,110 @@ interface User {
   type: string;
 }
 
-interface UserDetails {
-  name: string;
-  document: string;
-  age: number;
-  birthdate: string;
-  gender: string;
-  phone: string;
-  email: string;
-  type: string;
-  code: string;
-  program: string;
-  populationGroups: string[];
-  socialPrograms: string[];
-  appointments: Appointment[];
-}
-
-interface Appointment {
-  date: string;
-  time: string;
-  service: string;
-  specialist: string;
-  disability: boolean;
-  isFirstTime: boolean;
-  reason: string;
-  recommendations?: string;
-  status: "pendiente" | "realizado" | "cancelado";
-}
-
 export default function ConsultarUsuario() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<User[]>([]);
-  const [selectedUser, setSelectedUser] = useState<UserDetails | null>(null);
+  const [selectedUser, setSelectedUser] = useState<{
+    userData: UserData;
+    appointments: Appointment[];
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock users data for the example
-  const mockUsers: User[] = [
-    {
-      id: "1",
-      name: "Juan David",
-      document: "CC 1234567890",
-      type: "Estudiante",
-    },
-    {
-      id: "2",
-      name: "Juan Camilo",
-      document: "CC 0000000000",
-      type: "Docente",
-    },
-  ];
-
-  // Mock user details
-  const mockUserDetails: Record<string, UserDetails> = {
-    "1": {
-      name: "Juan David",
-      document: "CC 1234567890",
-      age: 19,
-      birthdate: "CC 1234567890",
-      gender: "Masculino",
-      phone: "1234567890",
-      email: "juandavidv@ufps.edu.co",
-      type: "Estudiante",
-      code: "1152200",
-      program: "Ingeniería de Sistemas",
-      populationGroups: ["Grupo Poblacional 1", "Grupo Poblacional 2"],
-      socialPrograms: ["Programa Social 1", "Programa Social 2"],
-      appointments: [
-        {
-          date: "20/03/2025",
-          time: "8:00 a.m.",
-          service: "Consulta Odontológica",
-          specialist: "Dr. Pérez",
-          disability: false,
-          isFirstTime: true,
-          reason: "Lorem",
-          recommendations: "Lorem",
-          status: "realizado",
-        },
-      ],
-    },
-    "2": {
-      name: "Juan Camilo",
-      document: "CC 0000000000",
-      age: 35,
-      birthdate: "CC 0000000000",
-      gender: "Masculino",
-      phone: "0000000000",
-      email: "juancamilo@ufps.edu.co",
-      type: "Docente",
-      code: "D001",
-      program: "Facultad de Ingeniería",
-      populationGroups: [],
-      socialPrograms: [],
-      appointments: [],
-    },
-  };
-
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    setIsLoading(true);
+    if (!searchQuery.trim()) {
+      return;
+    }
 
-    // Simulate an API call
-    setTimeout(() => {
-      // Filter users based on the search query
-      const filteredUsers = mockUsers.filter(
-        (user) =>
-          user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          user.document.toLowerCase().includes(searchQuery.toLowerCase()),
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Search users by fullName or documentNumber
+      const usersQuery = query(
+        collection(db, "users"),
+        where("fullName", ">=", searchQuery),
+        where("fullName", "<=", searchQuery + "\uf8ff"),
       );
 
-      setSearchResults(filteredUsers);
+      const userSnapshot = await getDocs(usersQuery);
+
+      // Or try to search by document number
+      let userResults: User[] = [];
+
+      if (userSnapshot.empty) {
+        const docQuery = query(
+          collection(db, "users"),
+          where("documentNumber", ">=", searchQuery),
+          where("documentNumber", "<=", searchQuery + "\uf8ff"),
+        );
+
+        const docSnapshot = await getDocs(docQuery);
+
+        docSnapshot.forEach((doc) => {
+          const data = doc.data();
+          userResults.push({
+            id: doc.id,
+            name: data.fullName || "Usuario sin nombre",
+            document:
+              `${data.documentType || ""} ${data.documentNumber || ""}`.trim(),
+            type: data.status || "No especificado",
+          });
+        });
+      } else {
+        userSnapshot.forEach((doc) => {
+          const data = doc.data();
+          userResults.push({
+            id: doc.id,
+            name: data.fullName || "Usuario sin nombre",
+            document:
+              `${data.documentType || ""} ${data.documentNumber || ""}`.trim(),
+            type: data.status || "No especificado",
+          });
+        });
+      }
+
+      setSearchResults(userResults);
+
+      if (userResults.length === 0) {
+        setError("No se encontraron usuarios que coincidan con la búsqueda");
+      }
+    } catch (error) {
+      console.error("Error searching users:", error);
+      setError("Error al buscar usuarios. Intente nuevamente.");
+    } finally {
       setIsLoading(false);
-    }, 500);
+    }
   };
 
-  const handleUserSelect = (userId: string) => {
-    setSelectedUser(mockUserDetails[userId]);
+  const handleUserSelect = async (userId: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Get user data
+      const userData = await getUserData(userId);
+
+      if (!userData) {
+        throw new Error("No se pudo obtener la información del usuario");
+      }
+
+      // Get user appointments
+      const userAppointments = await getAppointmentsByUserId(userId);
+
+      // Set selected user with both user data and appointments
+      setSelectedUser({
+        userData,
+        appointments: userAppointments,
+      });
+    } catch (error) {
+      console.error("Error getting user details:", error);
+      setError("Error al obtener los detalles del usuario");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getStatusBadgeClass = (status: string) => {
@@ -157,6 +149,10 @@ export default function ConsultarUsuario() {
     }
   };
 
+  const formatDate = (date: Date) => {
+    return format(date, "dd/MM/yyyy");
+  };
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <h1 className="mb-6 text-2xl font-bold">Consultar Usuario</h1>
@@ -172,7 +168,7 @@ export default function ConsultarUsuario() {
               id="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Juan"
+              placeholder="Ingrese nombre o documento"
               className="w-full"
             />
           </div>
@@ -185,6 +181,13 @@ export default function ConsultarUsuario() {
           </Button>
         </div>
       </form>
+
+      {/* Error message */}
+      {error && (
+        <div className="mb-6 rounded-md bg-red-50 p-4 text-red-800">
+          <p>{error}</p>
+        </div>
+      )}
 
       {/* Search Results */}
       {searchResults.length > 0 && !selectedUser && (
@@ -263,7 +266,9 @@ export default function ConsultarUsuario() {
                 </div>
                 <div>
                   <div className="text-sm font-medium">Nombre</div>
-                  <div>{selectedUser.name}</div>
+                  <div>
+                    {selectedUser.userData.fullName || "No especificado"}
+                  </div>
                 </div>
               </div>
 
@@ -276,17 +281,10 @@ export default function ConsultarUsuario() {
                 </div>
                 <div>
                   <div className="text-sm font-medium">Documento</div>
-                  <div>{selectedUser.document}</div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="rounded-full bg-amber-100 p-2">
-                  <Icon icon="ph:calendar" className="h-5 w-5 text-amber-600" />
-                </div>
-                <div>
-                  <div className="text-sm font-medium">Edad</div>
-                  <div>{selectedUser.age}</div>
+                  <div>
+                    {`${selectedUser.userData.documentType || ""} ${selectedUser.userData.documentNumber || ""}`.trim() ||
+                      "No especificado"}
+                  </div>
                 </div>
               </div>
 
@@ -296,7 +294,9 @@ export default function ConsultarUsuario() {
                 </div>
                 <div>
                   <div className="text-sm font-medium">Fecha de nacimiento</div>
-                  <div>{selectedUser.birthdate}</div>
+                  <div>
+                    {selectedUser.userData.birthDate || "No especificado"}
+                  </div>
                 </div>
               </div>
 
@@ -309,7 +309,7 @@ export default function ConsultarUsuario() {
                 </div>
                 <div>
                   <div className="text-sm font-medium">Sexo</div>
-                  <div>{selectedUser.gender}</div>
+                  <div>{selectedUser.userData.gender || "No especificado"}</div>
                 </div>
               </div>
 
@@ -319,7 +319,7 @@ export default function ConsultarUsuario() {
                 </div>
                 <div>
                   <div className="text-sm font-medium">Celular</div>
-                  <div>{selectedUser.phone}</div>
+                  <div>{selectedUser.userData.phone || "No especificado"}</div>
                 </div>
               </div>
 
@@ -329,7 +329,7 @@ export default function ConsultarUsuario() {
                 </div>
                 <div>
                   <div className="text-sm font-medium">Correo</div>
-                  <div>{selectedUser.email}</div>
+                  <div>{selectedUser.userData.email || "No especificado"}</div>
                 </div>
               </div>
             </div>
@@ -347,7 +347,7 @@ export default function ConsultarUsuario() {
                 </div>
                 <div>
                   <div className="text-sm font-medium">Estamento</div>
-                  <div>{selectedUser.type}</div>
+                  <div>{selectedUser.userData.status || "No especificado"}</div>
                 </div>
               </div>
 
@@ -357,7 +357,7 @@ export default function ConsultarUsuario() {
                 </div>
                 <div>
                   <div className="text-sm font-medium">Código</div>
-                  <div>{selectedUser.code}</div>
+                  <div>{selectedUser.userData.code || "No especificado"}</div>
                 </div>
               </div>
 
@@ -370,7 +370,9 @@ export default function ConsultarUsuario() {
                 </div>
                 <div>
                   <div className="text-sm font-medium">Programa Académico</div>
-                  <div>{selectedUser.program}</div>
+                  <div>
+                    {selectedUser.userData.program || "No especificado"}
+                  </div>
                 </div>
               </div>
             </div>
@@ -391,11 +393,14 @@ export default function ConsultarUsuario() {
                   <div className="text-sm font-medium">
                     Grupos Poblacionales
                   </div>
-                  {selectedUser.populationGroups.length > 0 ? (
+                  {selectedUser.userData.populationGroups &&
+                  selectedUser.userData.populationGroups.length > 0 ? (
                     <div className="flex flex-col gap-1">
-                      {selectedUser.populationGroups.map((group, index) => (
-                        <div key={index}>{group}</div>
-                      ))}
+                      {selectedUser.userData.populationGroups.map(
+                        (group, index) => (
+                          <div key={index}>{group}</div>
+                        ),
+                      )}
                     </div>
                   ) : (
                     <div className="text-gray-500">
@@ -411,11 +416,14 @@ export default function ConsultarUsuario() {
                 </div>
                 <div>
                   <div className="text-sm font-medium">Programas Sociales</div>
-                  {selectedUser.socialPrograms.length > 0 ? (
+                  {selectedUser.userData.socialPrograms &&
+                  selectedUser.userData.socialPrograms.length > 0 ? (
                     <div className="flex flex-col gap-1">
-                      {selectedUser.socialPrograms.map((program, index) => (
-                        <div key={index}>{program}</div>
-                      ))}
+                      {selectedUser.userData.socialPrograms.map(
+                        (program, index) => (
+                          <div key={index}>{program}</div>
+                        ),
+                      )}
                     </div>
                   ) : (
                     <div className="text-gray-500">
@@ -436,7 +444,7 @@ export default function ConsultarUsuario() {
                   <div key={index} className="rounded-lg border p-4">
                     <div className="mb-4 flex items-center justify-between">
                       <div className="font-medium">
-                        {appointment.date} - {appointment.time}
+                        {formatDate(appointment.date)} - {appointment.time}
                       </div>
                       <span
                         className={`${getStatusBadgeClass(appointment.status)} rounded-full px-2 py-1 text-xs font-medium text-white`}
@@ -455,7 +463,7 @@ export default function ConsultarUsuario() {
                         </div>
                         <div>
                           <div className="text-sm font-medium">Servicio</div>
-                          <div>{appointment.service}</div>
+                          <div>{appointment.serviceType}</div>
                         </div>
                       </div>
 
@@ -470,7 +478,7 @@ export default function ConsultarUsuario() {
                           <div className="text-sm font-medium">
                             Especialista
                           </div>
-                          <div>{appointment.specialist}</div>
+                          <div>{appointment.specialistName}</div>
                         </div>
                       </div>
 
@@ -509,7 +517,7 @@ export default function ConsultarUsuario() {
                         </div>
                         <div>
                           <div className="text-sm font-medium">Motivo</div>
-                          <div>{appointment.reason}</div>
+                          <div>{appointment.reason || "No especificado"}</div>
                         </div>
                       </div>
 
@@ -543,7 +551,7 @@ export default function ConsultarUsuario() {
       )}
 
       {/* No Results */}
-      {searchQuery && searchResults.length === 0 && !isLoading && (
+      {searchQuery && searchResults.length === 0 && !isLoading && !error && (
         <div className="rounded-lg border bg-gray-50 p-8 text-center">
           <Icon
             icon="ph:magnifying-glass"

@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { db } from "@/lib/firebase";
+import { getAppointmentsByUserId } from "@/services/appointment";
 import { UserData, setUserAsAdmin } from "@/services/user";
 
 interface User {
@@ -179,21 +180,23 @@ export default function UserList() {
         age = currentYear - birthYear;
       }
 
-      // Fetch appointments (mock for now, replace with real Firebase query)
-      // In a real implementation, you'd query the appointments collection filtered by user ID
-      const appointments: Appointment[] = [
-        {
-          date: "20/03/2025",
-          time: "8:00 a.m.",
-          service: "Consulta Odontológica",
-          specialist: "Dr. Pérez",
-          disability: false,
-          isFirstTime: true,
-          reason: "Lorem",
-          recommendations: "Lorem",
-          status: "realizado",
-        },
-      ];
+      // Fetch real appointment data from Firebase
+      const appointmentsData = await getAppointmentsByUserId(userId);
+
+      // Convert the Firebase appointments to the format expected by the UI
+      const appointments: Appointment[] = appointmentsData.map(
+        (appointment) => ({
+          date: appointment.date.toLocaleDateString("es-CO"),
+          time: appointment.time,
+          service: appointment.serviceType,
+          specialist: appointment.specialistName,
+          disability: appointment.disability,
+          isFirstTime: appointment.isFirstTime,
+          reason: appointment.reason || "",
+          recommendations: appointment.recommendations,
+          status: appointment.status as "pendiente" | "realizado" | "cancelado",
+        }),
+      );
 
       // Create the user details object
       const userDetails: UserDetails = {
