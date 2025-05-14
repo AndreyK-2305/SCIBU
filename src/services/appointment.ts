@@ -8,9 +8,9 @@ import {
   getDoc,
   query,
   where,
-  serverTimestamp,
-  Timestamp,
   orderBy,
+  Timestamp,
+  QueryConstraint,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
@@ -28,159 +28,228 @@ import {
 
 const COLLECTION_NAME = "appointments";
 
-// Convert Firestore document to Appointment object
-const convertDoc = (doc: any): Appointment => {
-  try {
-    const data = doc.data();
-
-    if (!data) {
-      console.warn("Documento sin datos:", doc.id);
-      return {
-        id: doc.id,
-        date: new Date(),
-        time: "",
-        requesterName: "",
-        requesterType: "",
-        serviceType: "",
-        specialistId: "",
-        specialistName: "",
-        status: "pendiente",
-        isFirstTime: false,
-        disability: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-    }
-
-    const appointment: Appointment = {
-      id: doc.id,
-      date:
-        data.date instanceof Timestamp
-          ? data.date.toDate()
-          : new Date(data.date),
-      time: data.time || "",
-      requesterName: data.requesterName || "",
-      requesterType: data.requesterType || "",
-      serviceType: data.serviceType || "",
-      specialistId: data.specialistId || "",
-      specialistName: data.specialistName || "",
-      status: data.status || "pendiente",
-      isFirstTime: data.isFirstTime || false,
-      disability: data.disability || false,
-      reason: data.reason || "",
-      recommendations: data.recommendations || "",
-      createdAt: data.createdAt
-        ? data.createdAt instanceof Timestamp
-          ? data.createdAt.toDate()
-          : new Date(data.createdAt)
-        : new Date(),
-      updatedAt: data.updatedAt
-        ? data.updatedAt instanceof Timestamp
-          ? data.updatedAt.toDate()
-          : new Date(data.updatedAt)
-        : new Date(),
-    };
-
-    return appointment;
-  } catch (error) {
-    console.error("Error al convertir documento de cita:", error);
-    // Return a default appointment in case of error
-    return {
-      id: doc.id || "error-id",
-      date: new Date(),
-      time: "",
-      requesterName: "Error al cargar cita",
-      requesterType: "",
-      serviceType: "",
-      specialistId: "",
-      specialistName: "",
-      status: "pendiente",
-      isFirstTime: false,
-      disability: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-  }
+// Helper function to convert Firestore document to Appointment
+const convertAppointmentDoc = (doc: any): Appointment => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    date: data.date?.toDate() || new Date(),
+    time: data.time || "",
+    requesterName: data.requesterName || "",
+    requesterType: data.requesterType || "",
+    serviceType: data.serviceType || "",
+    specialistId: data.specialistId || "",
+    specialistName: data.specialistName || "",
+    status: data.status || "pendiente",
+    isFirstTime: data.isFirstTime || false,
+    disability: data.disability || false,
+    reason: data.reason || "",
+    recommendations: data.recommendations || "",
+    createdAt: data.createdAt?.toDate() || new Date(),
+    updatedAt: data.updatedAt?.toDate() || new Date(),
+  };
 };
 
 // Get all appointments
 export const getAllAppointments = async (): Promise<Appointment[]> => {
-  // In a real app, this would be an API call
-  return getAppointmentsFromStorage();
-};
-
-// Get appointments by date
-export const getAppointmentsByDate = async (
-  date: Date,
-): Promise<Appointment[]> => {
-  const appointments = getAppointmentsFromStorage();
-  return appointments.filter((appointment) => {
-    const appointmentDate = new Date(appointment.date);
-    return (
-      appointmentDate.getDate() === date.getDate() &&
-      appointmentDate.getMonth() === date.getMonth() &&
-      appointmentDate.getFullYear() === date.getFullYear()
+  try {
+    const appointmentsQuery = query(
+      collection(db, COLLECTION_NAME),
+      orderBy("date", "desc"),
     );
-  });
+
+    const querySnapshot = await getDocs(appointmentsQuery);
+    const appointments: Appointment[] = [];
+
+    querySnapshot.forEach((doc) => {
+      appointments.push(convertAppointmentDoc(doc));
+    });
+
+    return appointments;
+  } catch (error) {
+    console.error("Error getting appointments:", error);
+    throw error;
+  }
 };
 
-// Create new appointment
-export const createAppointment = async (
-  appointmentData: Omit<
-    Appointment,
-    "id" | "status" | "createdAt" | "updatedAt"
-  >,
-): Promise<Appointment> => {
-  const appointments = getAppointmentsFromStorage();
+// Get appointments by user ID
+export const getAppointmentsByUserId = async (
+  userId: string,
+): Promise<Appointment[]> => {
+  try {
+    const appointmentsQuery = query(
+      collection(db, COLLECTION_NAME),
+      where("userId", "==", userId),
+      orderBy("date", "desc"),
+    );
 
-  const newAppointment: Appointment = {
-    ...appointmentData,
-    id: `appointment${Date.now()}`, // Generate a unique ID
-    status: "pendiente",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+    const querySnapshot = await getDocs(appointmentsQuery);
+    const appointments: Appointment[] = [];
 
-  const updatedAppointments = [...appointments, newAppointment];
-  saveAppointmentsToStorage(updatedAppointments);
+    querySnapshot.forEach((doc) => {
+      appointments.push(convertAppointmentDoc(doc));
+    });
 
-  return newAppointment;
+    return appointments;
+  } catch (error) {
+    console.error("Error getting user appointments:", error);
+    throw error;
+  }
 };
 
-// Get appointments for a specific date
-export const getAppointmentsBySpecialist = async (
+// Get appointments by specialist ID
+export const getAppointmentsBySpecialistId = async (
   specialistId: string,
 ): Promise<Appointment[]> => {
   try {
-    const q = query(
+    const appointmentsQuery = query(
       collection(db, COLLECTION_NAME),
       where("specialistId", "==", specialistId),
       orderBy("date", "desc"),
     );
 
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map((doc) => convertDoc(doc));
+    const querySnapshot = await getDocs(appointmentsQuery);
+    const appointments: Appointment[] = [];
+
+    querySnapshot.forEach((doc) => {
+      appointments.push(convertAppointmentDoc(doc));
+    });
+
+    return appointments;
   } catch (error) {
-    console.error("Error al obtener citas por especialista:", error);
+    console.error("Error getting specialist appointments:", error);
     throw error;
   }
 };
 
-// Get a appointment by ID
+// Get appointments by date range
+export const getAppointmentsByDateRange = async (
+  startDate: Date,
+  endDate: Date,
+): Promise<Appointment[]> => {
+  try {
+    const startTimestamp = Timestamp.fromDate(startDate);
+    const endTimestamp = Timestamp.fromDate(endDate);
+
+    const appointmentsQuery = query(
+      collection(db, COLLECTION_NAME),
+      where("date", ">=", startTimestamp),
+      where("date", "<=", endTimestamp),
+      orderBy("date", "asc"),
+    );
+
+    const querySnapshot = await getDocs(appointmentsQuery);
+    const appointments: Appointment[] = [];
+
+    querySnapshot.forEach((doc) => {
+      appointments.push(convertAppointmentDoc(doc));
+    });
+
+    return appointments;
+  } catch (error) {
+    console.error("Error getting appointments by date range:", error);
+    throw error;
+  }
+};
+
+// Get filtered appointments (with multiple conditions)
+export const getFilteredAppointments = async (filters: {
+  userId?: string;
+  specialistId?: string;
+  serviceType?: string;
+  status?: AppointmentStatus;
+  startDate?: Date;
+  endDate?: Date;
+}): Promise<Appointment[]> => {
+  try {
+    const constraints: QueryConstraint[] = [];
+
+    if (filters.userId) {
+      constraints.push(where("userId", "==", filters.userId));
+    }
+
+    if (filters.specialistId) {
+      constraints.push(where("specialistId", "==", filters.specialistId));
+    }
+
+    if (filters.serviceType) {
+      constraints.push(where("serviceType", "==", filters.serviceType));
+    }
+
+    if (filters.status) {
+      constraints.push(where("status", "==", filters.status));
+    }
+
+    if (filters.startDate) {
+      constraints.push(
+        where("date", ">=", Timestamp.fromDate(filters.startDate)),
+      );
+    }
+
+    if (filters.endDate) {
+      constraints.push(
+        where("date", "<=", Timestamp.fromDate(filters.endDate)),
+      );
+    }
+
+    // Add default ordering by date
+    constraints.push(orderBy("date", "desc"));
+
+    const appointmentsQuery = query(
+      collection(db, COLLECTION_NAME),
+      ...constraints,
+    );
+    const querySnapshot = await getDocs(appointmentsQuery);
+
+    const appointments: Appointment[] = [];
+    querySnapshot.forEach((doc) => {
+      appointments.push(convertAppointmentDoc(doc));
+    });
+
+    return appointments;
+  } catch (error) {
+    console.error("Error getting filtered appointments:", error);
+    throw error;
+  }
+};
+
+// Get appointment by ID
 export const getAppointmentById = async (
   id: string,
 ): Promise<Appointment | null> => {
   try {
-    const docRef = doc(db, COLLECTION_NAME, id);
-    const docSnap = await getDoc(docRef);
+    const appointmentDoc = await getDoc(doc(db, COLLECTION_NAME, id));
 
-    if (docSnap.exists()) {
-      return convertDoc(docSnap);
-    } else {
-      return null;
+    if (appointmentDoc.exists()) {
+      return convertAppointmentDoc(appointmentDoc);
     }
+
+    return null;
   } catch (error) {
-    console.error("Error al obtener cita:", error);
+    console.error("Error getting appointment:", error);
+    throw error;
+  }
+};
+
+// Update appointment
+export const updateAppointment = async (
+  id: string,
+  appointmentData: Partial<Omit<Appointment, "id" | "createdAt" | "updatedAt">>,
+): Promise<void> => {
+  try {
+    const updateData: any = {
+      ...appointmentData,
+      updatedAt: Timestamp.now(),
+    };
+
+    // Convert Date objects to Firestore Timestamps
+    if (appointmentData.date) {
+      updateData.date = Timestamp.fromDate(appointmentData.date);
+    }
+
+    await updateDoc(doc(db, COLLECTION_NAME, id), updateData);
+  } catch (error) {
+    console.error("Error updating appointment:", error);
     throw error;
   }
 };
@@ -190,57 +259,59 @@ export const updateAppointmentStatus = async (
   id: string,
   status: AppointmentStatus,
   recommendations?: string,
-): Promise<Appointment> => {
-  const appointments = getAppointmentsFromStorage();
-  const appointment = appointments.find((a) => a.id === id);
+): Promise<void> => {
+  try {
+    const updateData: any = {
+      status,
+      updatedAt: Timestamp.now(),
+    };
 
-  if (!appointment) {
-    throw new Error(`Appointment with ID ${id} not found`);
+    if (recommendations) {
+      updateData.recommendations = recommendations;
+    }
+
+    await updateDoc(doc(db, COLLECTION_NAME, id), updateData);
+  } catch (error) {
+    console.error("Error updating appointment status:", error);
+    throw error;
   }
-
-  const updatedAppointment: Appointment = {
-    ...appointment,
-    status,
-    recommendations:
-      recommendations !== undefined
-        ? recommendations
-        : appointment.recommendations,
-    updatedAt: new Date(),
-  };
-
-  updateAppointmentInStorage(updatedAppointment);
-
-  return updatedAppointment;
-};
-
-// Update appointment (for rescheduling)
-export const updateAppointment = async (
-  id: string,
-  newDate: Date,
-  newTime: string,
-): Promise<Appointment> => {
-  const appointments = getAppointmentsFromStorage();
-  const appointment = appointments.find((a) => a.id === id);
-
-  if (!appointment) {
-    throw new Error(`Appointment with ID ${id} not found`);
-  }
-
-  const updatedAppointment: Appointment = {
-    ...appointment,
-    date: newDate,
-    time: newTime,
-    updatedAt: new Date(),
-  };
-
-  updateAppointmentInStorage(updatedAppointment);
-
-  return updatedAppointment;
 };
 
 // Delete appointment
 export const deleteAppointment = async (id: string): Promise<void> => {
-  const appointments = getAppointmentsFromStorage();
-  const updatedAppointments = appointments.filter((a) => a.id !== id);
-  saveAppointmentsToStorage(updatedAppointments);
+  try {
+    await deleteDoc(doc(db, COLLECTION_NAME, id));
+  } catch (error) {
+    console.error("Error deleting appointment:", error);
+    throw error;
+  }
+};
+
+// Create a new appointment
+export const createAppointment = async (
+  appointment: Omit<Appointment, "id" | "createdAt" | "updatedAt">,
+): Promise<Appointment> => {
+  try {
+    const appointmentData = {
+      ...appointment,
+      date: Timestamp.fromDate(appointment.date),
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    };
+
+    const docRef = await addDoc(
+      collection(db, COLLECTION_NAME),
+      appointmentData,
+    );
+
+    return {
+      ...appointment,
+      id: docRef.id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  } catch (error) {
+    console.error("Error creating appointment:", error);
+    throw error;
+  }
 };

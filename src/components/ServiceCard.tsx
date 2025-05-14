@@ -2,14 +2,14 @@ import React from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
-import { sampleSpecialists } from "@/data/sampleData";
+import { Card } from "@/components/ui/card";
 import { Service } from "@/types/service";
 
 interface ServiceCardProps {
   service: Service;
   onEdit: () => void;
   onToggleStatus: () => void;
+  onDelete?: () => void; // Keeping for API compatibility but will move to modal
 }
 
 export default function ServiceCard({
@@ -17,24 +17,15 @@ export default function ServiceCard({
   onEdit,
   onToggleStatus,
 }: ServiceCardProps) {
-  const { title, description, specialists, isActive } = service;
-
-  // Find specialist names based on IDs
-  const specialistNames = specialists.map((specialistId) => {
-    const specialist = sampleSpecialists.find((s) => s.id === specialistId);
-    return specialist
-      ? `Dr. ${specialist.name}`
-      : `Sin nombre (${specialistId})`;
-  });
+  // Handle both title and name properties
+  const title = service.title || service.name || "Sin título";
+  const { description, specialists, isActive } = service;
 
   return (
     <Card className="rounded-lg border p-6 shadow-sm">
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h2 className="text-xl font-bold">{title}</h2>
-        </div>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-bold">{title}</h2>
         <Badge
-          variant={isActive ? "sucess" : "destructive"}
           className={
             isActive
               ? "rounded-full bg-green-500 px-4 py-1 text-xs font-medium text-white"
@@ -45,50 +36,54 @@ export default function ServiceCard({
         </Badge>
       </div>
 
-      <div className="mb-6 space-y-6">
+      <div className="mb-6 space-y-4">
         <div className="flex items-start">
-          <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-lg bg-green-100">
+          <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 text-green-500">
             <svg
-              width="20"
-              height="20"
-              viewBox="0 0 20 20"
-              fill="none"
               xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              width="24"
+              height="24"
+              fill="currentColor"
             >
-              <path
-                d="M16.6666 3.33334H13.3333V1.66667H6.66665V3.33334H3.33331C2.41665 3.33334 1.66665 4.08334 1.66665 5.00001V6.66667C1.66665 9.16667 3.58331 11.25 6.08331 11.6667C6.74998 13.4167 8.33331 14.75 10.2333 14.9667C10.7833 16.05 11.85 16.6667 13.0833 16.6667H16.6666C17.5833 16.6667 18.3333 15.9167 18.3333 15V5.00001C18.3333 4.08334 17.5833 3.33334 16.6666 3.33334ZM3.33331 6.66667V5.00001H6.66665V8.33334C4.83331 8.33334 3.33331 7.63334 3.33331 6.66667ZM13.3333 15C12.5833 15 11.9166 14.5833 11.6666 14H13.3333C14.25 14 15 13.25 15 12.3333V7.50001C15 6.58334 14.25 5.83334 13.3333 5.83334H8.33331C7.41665 5.83334 6.66665 6.58334 6.66665 7.50001V12.3333C6.66665 13.25 7.41665 14 8.33331 14H10C10.25 14.5833 10.9166 15 11.6666 15H13.3333Z"
-                fill="#10B981"
-              />
+              <path d="M17 10H19C21 10 22 9 22 7V5C22 3 21 2 19 2H17C15 2 14 3 14 5V7C14 9 15 10 17 10Z" />
+              <path d="M5 22C7 22 8 21 8 19V17C8 15 7 14 5 14H3C1 14 0 15 0 17V19C0 21 1 22 3 22H5Z" />
+              <path d="M6 10C8.2 10 10 8.2 10 6C10 3.8 8.2 2 6 2C3.8 2 2 3.8 2 6C2 8.2 3.8 10 6 10Z" />
+              <path d="M18 22C20.2 22 22 20.2 22 18C22 15.8 20.2 14 18 14C15.8 14 14 15.8 14 18C14 20.2 15.8 22 18 22Z" />
             </svg>
           </div>
           <div>
             <h3 className="font-semibold text-gray-800">Especialistas</h3>
-            {/* Display specialist names */}
-            {specialistNames.length > 0 ? (
-              specialistNames.map((specialistName, index) => (
-                <p key={index} className="text-gray-600">
-                  {specialistName}
-                </p>
-              ))
-            ) : (
-              <p className="text-gray-600">No hay especialistas asignados</p>
-            )}
+            <div className="space-y-1">
+              {specialists.length > 0 ? (
+                specialists.map((specialistId, index) => (
+                  <p key={index} className="text-gray-600">
+                    Dr. {specialistId}
+                  </p>
+                ))
+              ) : (
+                <p className="text-gray-600">No hay especialistas asignados</p>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="flex items-start">
-          <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100">
+          <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-500">
             <svg
-              width="20"
-              height="20"
-              viewBox="0 0 20 20"
-              fill="none"
               xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              width="24"
+              height="24"
+              fill="currentColor"
             >
-              <path
-                d="M10 0C4.48 0 0 4.48 0 10C0 15.52 4.48 20 10 20C15.52 20 20 15.52 20 10C20 4.48 15.52 0 10 0ZM10 18C5.59 18 2 14.41 2 10C2 5.59 5.59 2 10 2C14.41 2 18 5.59 18 10C18 14.41 14.41 18 10 18ZM11 5H9V11H15V9H11V5Z"
-                fill="#818CF8"
-              />
+              <path d="M16 22.75H8C4.35 22.75 2.25 20.65 2.25 17V7C2.25 3.35 4.35 1.25 8 1.25H16C19.65 1.25 21.75 3.35 21.75 7V17C21.75 20.65 19.65 22.75 16 22.75ZM8 2.75C5.14 2.75 3.75 4.14 3.75 7V17C3.75 19.86 5.14 21.25 8 21.25H16C18.86 21.25 20.25 19.86 20.25 17V7C20.25 4.14 18.86 2.75 16 2.75H8Z" />
+              <path d="M18.5 9.25H16.5C15.81 9.25 15.25 8.69 15.25 8V6C15.25 5.31 15.81 4.75 16.5 4.75H18.5C19.19 4.75 19.75 5.31 19.75 6V8C19.75 8.69 19.19 9.25 18.5 9.25ZM16.5 6.25V7.75H18V6.25H16.5Z" />
+              <path d="M12 13.75H7C6.59 13.75 6.25 13.41 6.25 13C6.25 12.59 6.59 12.25 7 12.25H12C12.41 12.25 12.75 12.59 12.75 13C12.75 13.41 12.41 13.75 12 13.75Z" />
+              <path d="M17 13.75H14C13.59 13.75 13.25 13.41 13.25 13C13.25 12.59 13.59 12.25 14 12.25H17C17.41 12.25 17.75 12.59 17.75 13C17.75 13.41 17.41 13.75 17 13.75Z" />
+              <path d="M12 17.75H7C6.59 17.75 6.25 17.41 6.25 17C6.25 16.59 6.59 16.25 7 16.25H12C12.41 16.25 12.75 16.59 12.75 17C12.75 17.41 12.41 17.75 12 17.75Z" />
+              <path d="M17 17.75H14C13.59 17.75 13.25 17.41 13.25 17C13.25 16.59 13.59 16.25 14 16.25H17C17.41 16.25 17.75 16.59 17.75 17C17.75 17.41 17.41 17.75 17 17.75Z" />
+              <path d="M12 9.75H7C6.59 9.75 6.25 9.41 6.25 9C6.25 8.59 6.59 8.25 7 8.25H12C12.41 8.25 12.75 8.59 12.75 9C12.75 9.41 12.41 9.75 12 9.75Z" />
             </svg>
           </div>
           <div>
@@ -101,7 +96,7 @@ export default function ServiceCard({
       <div className="flex space-x-3">
         <Button
           variant="default"
-          className="bg-indigo-600 font-medium text-white"
+          className="flex-1 bg-indigo-600 font-medium text-white hover:bg-indigo-700"
           onClick={onEdit}
         >
           Editar
@@ -110,8 +105,8 @@ export default function ServiceCard({
           variant="destructive"
           className={
             isActive
-              ? "bg-red-500 font-medium text-white hover:bg-red-600"
-              : "bg-green-500 font-medium text-white hover:bg-green-600"
+              ? "flex-1 bg-red-500 font-medium text-white hover:bg-red-600"
+              : "flex-1 bg-green-500 font-medium text-white hover:bg-green-600"
           }
           onClick={onToggleStatus}
         >

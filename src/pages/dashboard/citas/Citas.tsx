@@ -1,120 +1,253 @@
 import { Icon } from "@iconify/react";
-import { format } from "date-fns";
+import { format, isToday, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import CreateAppointmentModal from "@/components/CreateAppointmentModal";
-import RescheduleAppointmentModal from "@/components/RescheduleAppointmentModal";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import useAuth from "@/hooks/useAuth";
 import {
   getAllAppointments,
+  getAppointmentsByUserId,
   updateAppointmentStatus,
-  updateAppointment,
 } from "@/services/appointment";
-import { initializeLocalStorage } from "@/services/localStorage";
+import { getAllServices } from "@/services/service";
+import { isUserAdmin } from "@/services/user";
 import { Appointment, AppointmentStatus } from "@/types/appointment";
+import { Service } from "@/types/service";
+
+import AppointmentForm from "./components/AppointmentForm";
+import AppointmentStatusModal from "./components/AppointmentStatusModal";
 
 export default function Citas() {
+  // Authentication
   const { user } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Data state
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
-  const [pendingAppointments, setPendingAppointments] = useState<Appointment[]>(
-    [],
+  const [error, setError] = useState<string | null>(null);
+
+  // Filter state
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+    new Date(),
   );
-  const [completedAppointments, setCompletedAppointments] = useState<
-    Appointment[]
-  >([]);
-  const [canceledAppointments, setCanceledAppointments] = useState<
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<AppointmentStatus | "all">(
+    "all",
+  );
+  const [serviceFilter, setServiceFilter] = useState<string>("all");
+  const [filteredAppointments, setFilteredAppointments] = useState<
     Appointment[]
   >([]);
 
-  // Selected appointment for modals
+  // UI state
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("upcoming");
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null);
 
-  // Modal states
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
-
+  // Check if user is admin
   useEffect(() => {
-    // Initialize localStorage if needed
-    initializeLocalStorage();
+    const checkAdminStatus = async () => {
+      if (user) {
+        try {
+          const adminStatus = await isUserAdmin(user.uid);
+          setIsAdmin(adminStatus);
+        } catch (error) {
+          console.error("Error checking admin status:", error);
+          setIsAdmin(false);
+        }
+      }
+    };
 
-    // Load appointments
-    loadAppointments();
+    checkAdminStatus();
   }, [user]);
 
-  // Load appointments filtered by user
-  const loadAppointments = async () => {
-    try {
-      setLoading(true);
+  // Load appointments and services
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
 
-      // Get all appointments
-      const appointmentsData = await getAllAppointments();
+        // Get services for filtering
+        const loadedServices = await getAllServices();
+        setServices(loadedServices);
 
-      // Filter appointments by the current user
-      const userAppointments = user
-        ? appointmentsData.filter(
-            (apt) => apt.requesterName === user.displayName,
-          )
-        : appointmentsData;
+        // Get appointments based on user role
+        let loadedAppointments: Appointment[];
+        if (user) {
+          if (isAdmin) {
+            // Admins see all appointments
+            loadedAppointments = await getAllAppointments();
+          } else {
+            // Regular users only see their own appointments
+            loadedAppointments = await getAppointmentsByUserId(user.uid);
+          }
+          setAppointments(loadedAppointments);
+        }
+      } catch (error) {
+        console.error("Error loading data:", error);
+        setError("Error al cargar los datos. Intente nuevamente.");
+        toast.error("Error al cargar los datos");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      // Sort appointments by date (newest first)
-      userAppointments.sort((a, b) => {
-        const dateA = new Date(a.date);
-        const dateB = new Date(b.date);
-        return dateB.getTime() - dateA.getTime();
+    loadData();
+  }, [user, isAdmin]);
+
+  // Apply filters
+  useEffect(() => {
+    if (!appointments) return;
+
+    let filtered = [...appointments];
+
+    // Filter by date if selected
+    if (selectedDate) {
+      filtered = filtered.filter((appointment) => {
+        const appointmentDate = appointment.date;
+        return (
+          appointmentDate.getDate() === selectedDate.getDate() &&
+          appointmentDate.getMonth() === selectedDate.getMonth() &&
+          appointmentDate.getFullYear() === selectedDate.getFullYear()
+        );
       });
-
-      // Filter appointments by status
-      setPendingAppointments(
-        userAppointments.filter((apt) => apt.status === "pendiente"),
-      );
-      setCompletedAppointments(
-        userAppointments.filter((apt) => apt.status === "realizado"),
-      );
-      setCanceledAppointments(
-        userAppointments.filter((apt) => apt.status === "cancelado"),
-      );
-    } catch (error) {
-      console.error("Error loading appointments:", error);
-      toast.error("Error al cargar las citas");
-    } finally {
-      setLoading(false);
     }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (appointment) =>
+          appointment.requesterName.toLowerCase().includes(query) ||
+          appointment.specialistName.toLowerCase().includes(query) ||
+          appointment.serviceType.toLowerCase().includes(query),
+      );
+    }
+
+    // Filter by status
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(
+        (appointment) => appointment.status === statusFilter,
+      );
+    }
+
+    // Filter by service
+    if (serviceFilter !== "all") {
+      filtered = filtered.filter(
+        (appointment) => appointment.serviceType === serviceFilter,
+      );
+    }
+
+    // Filter by tab
+    if (activeTab === "upcoming") {
+      filtered = filtered.filter(
+        (appointment) =>
+          appointment.date >= new Date() && appointment.status === "pendiente",
+      );
+    } else if (activeTab === "past") {
+      filtered = filtered.filter(
+        (appointment) =>
+          appointment.date < new Date() ||
+          appointment.status === "realizado" ||
+          appointment.status === "cancelado",
+      );
+    }
+
+    setFilteredAppointments(filtered);
+  }, [
+    appointments,
+    selectedDate,
+    searchQuery,
+    statusFilter,
+    serviceFilter,
+    activeTab,
+  ]);
+
+  // Handle appointment creation
+  const handleAppointmentCreated = (newAppointment: Appointment) => {
+    setAppointments([newAppointment, ...appointments]);
+    setIsFormOpen(false);
+    toast.success("Cita agendada exitosamente");
   };
 
-  // Handle appointment cancellation
-  const handleCancel = async (appointment: Appointment) => {
-    if (!window.confirm("¿Está seguro que desea cancelar esta cita?")) {
-      return;
-    }
+  // Handle opening the status modal
+  const handleUpdateStatus = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setIsStatusModalOpen(true);
+  };
+
+  // Handle appointment status update
+  const handleStatusUpdate = async (
+    status: AppointmentStatus,
+    recommendations?: string,
+  ) => {
+    if (!selectedAppointment) return;
 
     try {
-      await updateAppointmentStatus(appointment.id, "cancelado");
-      toast.success("Cita cancelada exitosamente");
-      loadAppointments();
+      await updateAppointmentStatus(
+        selectedAppointment.id,
+        status,
+        recommendations,
+      );
+
+      // Update appointment in local state
+      const updatedAppointments = appointments.map((appointment) =>
+        appointment.id === selectedAppointment.id
+          ? {
+              ...appointment,
+              status,
+              recommendations: recommendations || appointment.recommendations,
+              updatedAt: new Date(),
+            }
+          : appointment,
+      );
+
+      setAppointments(updatedAppointments);
+      setIsStatusModalOpen(false);
+      setSelectedAppointment(null);
+
+      toast.success(
+        `Estado de la cita actualizado a "${getStatusLabel(status)}"`,
+      );
     } catch (error) {
-      console.error("Error canceling appointment:", error);
-      toast.error("Error al cancelar la cita");
+      console.error("Error updating appointment status:", error);
+      toast.error("Error al actualizar el estado de la cita");
     }
   };
 
-  // Handle appointment rescheduling
-  const handleReschedule = (appointment: Appointment) => {
-    setSelectedAppointment(appointment);
-    setRescheduleModalOpen(true);
+  // Helper function to get status label
+  const getStatusLabel = (status: AppointmentStatus): string => {
+    switch (status) {
+      case "pendiente":
+        return "Pendiente";
+      case "realizado":
+        return "Realizada";
+      case "cancelado":
+        return "Cancelada";
+      default:
+        return status;
+    }
   };
 
-  // Format date for display (DD/MM/YYYY)
-  const formatDate = (date: Date) => {
-    const d = new Date(date);
-    return format(d, "dd/MM/yyyy", { locale: es });
-  };
-
-  // Get status badge color
-  const getStatusBadgeClass = (status: AppointmentStatus) => {
+  // Helper function to get status badge color
+  const getStatusColor = (status: AppointmentStatus): string => {
     switch (status) {
       case "pendiente":
         return "bg-amber-500";
@@ -127,297 +260,320 @@ export default function Citas() {
     }
   };
 
-  // Get status text
-  const getStatusText = (status: AppointmentStatus) => {
-    switch (status) {
-      case "pendiente":
-        return "Pendiente";
-      case "realizado":
-        return "Realizada";
-      case "cancelado":
-        return "Cancelada";
-      default:
-        return "Desconocido";
-    }
+  // Format date for display
+  const formatAppointmentDate = (date: Date): string => {
+    return format(date, "PPP", { locale: es });
   };
 
   return (
-    <div className="mx-auto max-w-4xl">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Historial de Citas</h1>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Citas</h1>
         <Button
-          onClick={() => setCreateModalOpen(true)}
+          onClick={() => setIsFormOpen(true)}
           className="bg-indigo-600 hover:bg-indigo-700"
         >
-          Programar Cita
+          Agendar Cita
         </Button>
       </div>
 
-      {loading ? (
-        <div className="flex h-40 items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-indigo-600"></div>
+      <div className="grid gap-6 md:grid-cols-[1fr_300px]">
+        <div className="space-y-6">
+          {/* Tabs */}
+          <Tabs
+            defaultValue="upcoming"
+            className="w-full"
+            onValueChange={setActiveTab}
+          >
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="upcoming">Próximas</TabsTrigger>
+              <TabsTrigger value="past">Historial</TabsTrigger>
+            </TabsList>
+
+            <div className="my-4 flex flex-wrap gap-2">
+              {/* Search input */}
+              <div className="flex min-w-[200px] flex-1">
+                <Input
+                  placeholder="Buscar por nombre, especialista o servicio"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Status filter */}
+              <Select
+                value={statusFilter}
+                onValueChange={(value) =>
+                  setStatusFilter(value as AppointmentStatus | "all")
+                }
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los estados</SelectItem>
+                  <SelectItem value="pendiente">Pendiente</SelectItem>
+                  <SelectItem value="realizado">Realizada</SelectItem>
+                  <SelectItem value="cancelado">Cancelada</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Service filter */}
+              <Select value={serviceFilter} onValueChange={setServiceFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Servicio" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los servicios</SelectItem>
+                  {services.map((service) => (
+                    <SelectItem key={service.id} value={service.title}>
+                      {service.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <TabsContent value="upcoming" className="space-y-4">
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <div className="text-center">
+                    <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-t-2 border-b-2 border-indigo-600"></div>
+                    <p className="text-gray-600">Cargando citas...</p>
+                  </div>
+                </div>
+              ) : filteredAppointments.length === 0 ? (
+                <div className="rounded-lg border p-8 text-center">
+                  <p className="mb-4 text-gray-600">No tienes citas próximas</p>
+                  <Button
+                    onClick={() => setIsFormOpen(true)}
+                    className="bg-indigo-600"
+                  >
+                    Agendar una cita
+                  </Button>
+                </div>
+              ) : (
+                filteredAppointments.map((appointment) => (
+                  <AppointmentCard
+                    key={appointment.id}
+                    appointment={appointment}
+                    onUpdateStatus={handleUpdateStatus}
+                    isAdmin={isAdmin}
+                  />
+                ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="past" className="space-y-4">
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <div className="text-center">
+                    <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-t-2 border-b-2 border-indigo-600"></div>
+                    <p className="text-gray-600">Cargando historial...</p>
+                  </div>
+                </div>
+              ) : filteredAppointments.length === 0 ? (
+                <div className="rounded-lg border p-8 text-center">
+                  <p className="text-gray-600">
+                    No tienes citas en tu historial
+                  </p>
+                </div>
+              ) : (
+                filteredAppointments.map((appointment) => (
+                  <AppointmentCard
+                    key={appointment.id}
+                    appointment={appointment}
+                    onUpdateStatus={handleUpdateStatus}
+                    isAdmin={isAdmin}
+                  />
+                ))
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
-      ) : (
-        <div className="space-y-8">
-          {/* Pending Appointments */}
-          <div>
-            <h2 className="mb-4 text-lg font-semibold">Citas Pendientes</h2>
-            {pendingAppointments.length > 0 ? (
-              <div className="space-y-4">
-                {pendingAppointments.map((appointment) => (
-                  <div
-                    key={appointment.id}
-                    className="rounded-lg border-l-4 border-amber-500 bg-white p-6 shadow-sm"
-                  >
-                    <div className="mb-4 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Icon
-                          icon="mdi:calendar"
-                          className="h-5 w-5 text-amber-500"
-                        />
-                        <span className="font-medium">
-                          {formatDate(appointment.date)} - {appointment.time}
-                        </span>
-                      </div>
-                      <span
-                        className={`${getStatusBadgeClass(appointment.status)} rounded-full px-2 py-1 text-xs font-medium text-white`}
-                      >
-                        {getStatusText(appointment.status)}
-                      </span>
-                    </div>
 
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-full bg-purple-100 p-2">
-                          <Icon
-                            icon="mdi:stethoscope"
-                            className="h-5 w-5 text-purple-600"
-                          />
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium">Servicio</div>
-                          <div>{appointment.serviceType}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-full bg-green-100 p-2">
-                          <Icon
-                            icon="mdi:doctor"
-                            className="h-5 w-5 text-green-600"
-                          />
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium">
-                            Especialista
-                          </div>
-                          <div>{appointment.specialistName}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex justify-end gap-2 border-t pt-4">
-                      <Button
-                        variant="outline"
-                        className="border-amber-500 text-amber-500"
-                        onClick={() => handleReschedule(appointment)}
-                      >
-                        Reprogramar
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="border-red-500 text-red-500"
-                        onClick={() => handleCancel(appointment)}
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+        {/* Calendar */}
+        <div className="rounded-lg border p-4">
+          <h2 className="mb-4 text-lg font-semibold">Calendario</h2>
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={setSelectedDate}
+            className="rounded-md border"
+          />
+          <div className="mt-4">
+            <h3 className="mb-2 text-sm font-medium">Resumen del día</h3>
+            {filteredAppointments.length > 0 ? (
+              <div className="rounded-md bg-gray-50 p-3">
+                <p className="text-sm">
+                  <span className="font-medium">
+                    {filteredAppointments.length}
+                  </span>{" "}
+                  cita(s) para{" "}
+                  <span className="font-medium">
+                    {selectedDate ? formatAppointmentDate(selectedDate) : "hoy"}
+                  </span>
+                </p>
               </div>
             ) : (
-              <div className="rounded-lg bg-white p-6 text-center text-gray-500">
-                No tienes citas pendientes
-              </div>
-            )}
-          </div>
-
-          {/* Completed Appointments */}
-          <div>
-            <h2 className="mb-4 text-lg font-semibold">Citas Realizadas</h2>
-            {completedAppointments.length > 0 ? (
-              <div className="space-y-4">
-                {completedAppointments.map((appointment) => (
-                  <div
-                    key={appointment.id}
-                    className="rounded-lg border-l-4 border-green-500 bg-white p-6 shadow-sm"
-                  >
-                    <div className="mb-4 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Icon
-                          icon="mdi:calendar"
-                          className="h-5 w-5 text-green-500"
-                        />
-                        <span className="font-medium">
-                          {formatDate(appointment.date)} - {appointment.time}
-                        </span>
-                      </div>
-                      <span
-                        className={`${getStatusBadgeClass(appointment.status)} rounded-full px-2 py-1 text-xs font-medium text-white`}
-                      >
-                        {getStatusText(appointment.status)}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-full bg-purple-100 p-2">
-                          <Icon
-                            icon="mdi:stethoscope"
-                            className="h-5 w-5 text-purple-600"
-                          />
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium">Servicio</div>
-                          <div>{appointment.serviceType}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-full bg-green-100 p-2">
-                          <Icon
-                            icon="mdi:doctor"
-                            className="h-5 w-5 text-green-600"
-                          />
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium">
-                            Especialista
-                          </div>
-                          <div>{appointment.specialistName}</div>
-                        </div>
-                      </div>
-
-                      {appointment.recommendations && (
-                        <div className="col-span-1 flex items-start gap-3 md:col-span-2">
-                          <div className="rounded-full bg-blue-100 p-2">
-                            <Icon
-                              icon="mdi:note"
-                              className="h-5 w-5 text-blue-600"
-                            />
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium">
-                              Recomendaciones
-                            </div>
-                            <div>{appointment.recommendations}</div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-lg bg-white p-6 text-center text-gray-500">
-                No tienes citas realizadas
-              </div>
-            )}
-          </div>
-
-          {/* Canceled Appointments */}
-          <div>
-            <h2 className="mb-4 text-lg font-semibold">Citas Canceladas</h2>
-            {canceledAppointments.length > 0 ? (
-              <div className="space-y-4">
-                {canceledAppointments.map((appointment) => (
-                  <div
-                    key={appointment.id}
-                    className="rounded-lg border-l-4 border-red-500 bg-white p-6 shadow-sm"
-                  >
-                    <div className="mb-4 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Icon
-                          icon="mdi:calendar"
-                          className="h-5 w-5 text-red-500"
-                        />
-                        <span className="font-medium">
-                          {formatDate(appointment.date)} - {appointment.time}
-                        </span>
-                      </div>
-                      <span
-                        className={`${getStatusBadgeClass(appointment.status)} rounded-full px-2 py-1 text-xs font-medium text-white`}
-                      >
-                        {getStatusText(appointment.status)}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-full bg-purple-100 p-2">
-                          <Icon
-                            icon="mdi:stethoscope"
-                            className="h-5 w-5 text-purple-600"
-                          />
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium">Servicio</div>
-                          <div>{appointment.serviceType}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-full bg-green-100 p-2">
-                          <Icon
-                            icon="mdi:doctor"
-                            className="h-5 w-5 text-green-600"
-                          />
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium">
-                            Especialista
-                          </div>
-                          <div>{appointment.specialistName}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-lg bg-white p-6 text-center text-gray-500">
-                No tienes citas canceladas
-              </div>
+              <p className="text-sm text-gray-500">
+                No hay citas para{" "}
+                {selectedDate ? formatAppointmentDate(selectedDate) : "hoy"}
+              </p>
             )}
           </div>
         </div>
+      </div>
+
+      {/* Appointment Form Modal */}
+      {isFormOpen && (
+        <AppointmentForm
+          isOpen={isFormOpen}
+          onClose={() => setIsFormOpen(false)}
+          onAppointmentCreated={handleAppointmentCreated}
+          services={services}
+        />
       )}
 
-      {/* Modals */}
-      <RescheduleAppointmentModal
-        isOpen={rescheduleModalOpen}
-        onClose={() => setRescheduleModalOpen(false)}
-        appointment={selectedAppointment}
-        onReschedule={async (id, date, time) => {
-          try {
-            // In a real implementation, this would call the correct updateAppointment function
-            // await updateAppointment(id, { date, time });
-            toast.success("Cita reprogramada exitosamente");
-            loadAppointments();
-            return Promise.resolve();
-          } catch (error) {
-            toast.error("Error al reprogramar la cita");
-            return Promise.reject(error);
-          }
-        }}
-      />
-
-      <CreateAppointmentModal
-        isOpen={createModalOpen}
-        onClose={() => setCreateModalOpen(false)}
-        onSuccess={loadAppointments}
-        isAdmin={false} // Set to false for regular user mode
-      />
+      {/* Status Update Modal */}
+      {isStatusModalOpen && selectedAppointment && (
+        <AppointmentStatusModal
+          isOpen={isStatusModalOpen}
+          onClose={() => {
+            setIsStatusModalOpen(false);
+            setSelectedAppointment(null);
+          }}
+          onUpdateStatus={handleStatusUpdate}
+          appointment={selectedAppointment}
+        />
+      )}
     </div>
   );
 }
+
+// Appointment Card Component
+interface AppointmentCardProps {
+  appointment: Appointment;
+  onUpdateStatus: (appointment: Appointment) => void;
+  isAdmin: boolean;
+}
+
+function AppointmentCard({
+  appointment,
+  onUpdateStatus,
+  isAdmin,
+}: AppointmentCardProps) {
+  const { date, time, requesterName, specialistName, serviceType, status } =
+    appointment;
+
+  // Format date for display
+  const formattedDate = format(date, "PPP", { locale: es });
+
+  return (
+    <div className="rounded-lg border p-4 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-lg font-semibold">{serviceType}</h3>
+        <Badge className={`${getStatusColor(status)} px-3 py-1 text-white`}>
+          {getStatusLabel(status)}
+        </Badge>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="flex items-start gap-3">
+          <div className="rounded-full bg-blue-100 p-2">
+            <Icon icon="ph:calendar" className="h-5 w-5 text-blue-600" />
+          </div>
+          <div>
+            <div className="text-sm font-medium">Fecha y hora</div>
+            <div>
+              {formattedDate} - {time}
+              {isToday(date) && (
+                <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                  Hoy
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3">
+          <div className="rounded-full bg-green-100 p-2">
+            <Icon icon="ph:user" className="h-5 w-5 text-green-600" />
+          </div>
+          <div>
+            <div className="text-sm font-medium">Paciente</div>
+            <div>{requesterName}</div>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3">
+          <div className="rounded-full bg-purple-100 p-2">
+            <Icon icon="ph:stethoscope" className="h-5 w-5 text-purple-600" />
+          </div>
+          <div>
+            <div className="text-sm font-medium">Especialista</div>
+            <div>{specialistName}</div>
+          </div>
+        </div>
+
+        {appointment.recommendations && (
+          <div className="flex items-start gap-3">
+            <div className="rounded-full bg-indigo-100 p-2">
+              <Icon icon="ph:note-pencil" className="h-5 w-5 text-indigo-600" />
+            </div>
+            <div>
+              <div className="text-sm font-medium">Recomendaciones</div>
+              <div>{appointment.recommendations}</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Action buttons */}
+      {(status === "pendiente" || isAdmin) && (
+        <div className="mt-4 flex justify-end space-x-2">
+          <Button
+            variant="outline"
+            onClick={() => onUpdateStatus(appointment)}
+            className="text-sm"
+          >
+            {isAdmin
+              ? "Actualizar estado"
+              : status === "pendiente"
+                ? "Cancelar cita"
+                : "Ver detalles"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Helper function to get status label
+const getStatusLabel = (status: AppointmentStatus): string => {
+  switch (status) {
+    case "pendiente":
+      return "Pendiente";
+    case "realizado":
+      return "Realizada";
+    case "cancelado":
+      return "Cancelada";
+    default:
+      return status;
+  }
+};
+
+// Helper function to get status badge color
+const getStatusColor = (status: AppointmentStatus): string => {
+  switch (status) {
+    case "pendiente":
+      return "bg-amber-500";
+    case "realizado":
+      return "bg-green-500";
+    case "cancelado":
+      return "bg-red-500";
+    default:
+      return "bg-gray-500";
+  }
+};

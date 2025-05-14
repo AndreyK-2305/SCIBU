@@ -17,6 +17,8 @@ import { db } from "@/lib/firebase";
 import { Service } from "@/types/service";
 
 import { getServicesFromStorage, saveServicesToStorage } from "./localStorage";
+import { updateManyRelationships } from "./relationship";
+import { getSpecialistById, updateSpecialist } from "./specialist";
 
 const COLLECTION_NAME = "services";
 
@@ -77,55 +79,127 @@ const convertDoc = (doc: any): Service => {
 export const createService = async (
   serviceData: Omit<Service, "id" | "createdAt" | "updatedAt">,
 ): Promise<Service> => {
-  const services = getServicesFromStorage();
+  try {
+    // Add timestamps
+    const newServiceData = {
+      ...serviceData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
 
-  const newService: Service = {
-    ...serviceData,
-    id: `service${services.length + 1}`,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+    // Save the service to Firestore
+    const docRef = await addDoc(
+      collection(db, COLLECTION_NAME),
+      newServiceData,
+    );
 
-  const updatedServices = [...services, newService];
-  saveServicesToStorage(updatedServices);
+    // Create the service object to return
+    const newService: Service = {
+      id: docRef.id,
+      ...serviceData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
 
-  return newService;
+    // Update specialists to add this service to their services array
+    if (serviceData.specialists && serviceData.specialists.length > 0) {
+      for (const specialistId of serviceData.specialists) {
+        try {
+          const specialist = await getSpecialistById(specialistId);
+          if (specialist) {
+            const updatedServices = [...specialist.services, docRef.id];
+            await updateSpecialist(specialistId, { services: updatedServices });
+          }
+        } catch (error) {
+          console.error(`Error updating specialist ${specialistId}:`, error);
+        }
+      }
+    }
+
+    return newService;
+  } catch (error) {
+    console.error("Error creating service:", error);
+    throw error;
+  }
 };
 
 // Obtener todos los servicios
 export const getAllServices = async (): Promise<Service[]> => {
-  return getServicesFromStorage();
+  try {
+    const servicesQuery = query(
+      collection(db, COLLECTION_NAME),
+      orderBy("createdAt", "desc"),
+    );
+
+    const querySnapshot = await getDocs(servicesQuery);
+    const services: Service[] = [];
+
+    querySnapshot.forEach((doc) => {
+      services.push(convertDoc(doc));
+    });
+
+    return services;
+  } catch (error) {
+    console.error("Error getting services:", error);
+    // Return empty array if there's an error
+    return [];
+  }
 };
 
 // Obtener un servicio por ID
 export const getServiceById = async (id: string): Promise<Service | null> => {
-  const services = getServicesFromStorage();
-  const service = services.find((s) => s.id === id);
-  return service || null;
+  try {
+    const serviceDoc = await getDoc(doc(db, COLLECTION_NAME, id));
+
+    if (serviceDoc.exists()) {
+      return convertDoc(serviceDoc);
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error getting service:", error);
+    return null;
+  }
 };
 
 // Actualizar un servicio existente
 export const updateService = async (
   id: string,
-  serviceData: Partial<Omit<Service, "id" | "createdAt" | "updatedAt">>,
-): Promise<Service> => {
-  const services = getServicesFromStorage();
-  const serviceIndex = services.findIndex((s) => s.id === id);
+  serviceData: Partial<Service>,
+): Promise<void> => {
+  try {
+    // Get the existing service to compare specialists
+    const existingService = await getServiceById(id);
 
-  if (serviceIndex === -1) {
-    throw new Error(`Service with ID ${id} not found`);
+    // Create the update data with server timestamp
+    const updateData = {
+      ...serviceData,
+      updatedAt: serverTimestamp(),
+    };
+
+    // Update the service in Firestore
+    await updateDoc(doc(db, COLLECTION_NAME, id), updateData);
+
+    // Handle specialist relationships if specialists array has changed
+    if (serviceData.specialists && existingService) {
+      const oldSpecialists = existingService.specialists || [];
+      const newSpecialists = serviceData.specialists;
+
+      // Use the relationship utility to update many-to-many relationships
+      await updateManyRelationships(
+        COLLECTION_NAME,
+        id,
+        "specialists",
+        oldSpecialists,
+        newSpecialists,
+        "specialists",
+        "services",
+      );
+    }
+  } catch (error) {
+    console.error("Error updating service:", error);
+    throw error;
   }
-
-  const updatedService: Service = {
-    ...services[serviceIndex],
-    ...serviceData,
-    updatedAt: new Date(),
-  };
-
-  services[serviceIndex] = updatedService;
-  saveServicesToStorage(services);
-
-  return updatedService;
 };
 
 // Cambiar el estado activo de un servicio
@@ -147,9 +221,12 @@ export const toggleServiceStatus = async (
 
 // Eliminar un servicio
 export const deleteService = async (id: string): Promise<void> => {
-  const services = getServicesFromStorage();
-  const updatedServices = services.filter((s) => s.id !== id);
-  saveServicesToStorage(updatedServices);
+  try {
+    await deleteDoc(doc(db, COLLECTION_NAME, id));
+  } catch (error) {
+    console.error("Error deleting service:", error);
+    throw error;
+  }
 };
 
 // Verificar la conexión a Firestore

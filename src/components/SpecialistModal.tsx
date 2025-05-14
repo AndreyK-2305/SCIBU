@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getAllServices } from "@/services/service";
 import { Service } from "@/types/service";
 import { Specialist, SpecialistFormData } from "@/types/specialist";
 
@@ -47,10 +48,37 @@ export default function SpecialistModal({
   const [isActive, setIsActive] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Filter out services that are already selected
-  const availableServiceOptions = availableServices.filter(
-    (service) => !selectedServices.includes(service.title) && service.isActive,
+  // Fetch services on component mount or when modal opens
+  useEffect(() => {
+    const fetchServices = async () => {
+      if (isOpen) {
+        try {
+          setLoading(true);
+          // Use the availableServices from props if provided
+          if (availableServices && availableServices.length > 0) {
+            setServices(availableServices);
+          } else {
+            // Otherwise fetch from Firebase
+            const services = await getAllServices();
+            setServices(services);
+          }
+        } catch (error) {
+          console.error("Error fetching services:", error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchServices();
+  }, [isOpen, availableServices]);
+
+  // Filter out services that are already selected or inactive
+  const availableServiceOptions = services.filter(
+    (service) => !selectedServices.includes(service.id) && service.isActive,
   );
 
   useEffect(() => {
@@ -101,6 +129,12 @@ export default function SpecialistModal({
     if (passwordStrength === 2) return "Media";
     if (passwordStrength === 3) return "Buena";
     return "Fuerte";
+  };
+
+  // Get service title by ID
+  const getServiceTitle = (serviceId: string) => {
+    const service = services.find((s) => s.id === serviceId);
+    return service ? service.title : serviceId;
   };
 
   const handleSave = () => {
@@ -249,13 +283,18 @@ export default function SpecialistModal({
               <Select
                 value={selectedService}
                 onValueChange={setSelectedService}
+                disabled={loading || availableServiceOptions.length === 0}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Seleccionar servicio" />
+                  <SelectValue
+                    placeholder={
+                      loading ? "Cargando..." : "Seleccionar servicio"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {availableServiceOptions.map((service) => (
-                    <SelectItem key={service.id} value={service.title}>
+                    <SelectItem key={service.id} value={service.id}>
                       {service.title}
                     </SelectItem>
                   ))}
@@ -265,25 +304,33 @@ export default function SpecialistModal({
                 type="button"
                 onClick={handleAddService}
                 className="bg-indigo-600"
-                disabled={!selectedService}
+                disabled={!selectedService || loading}
               >
                 Agregar
               </Button>
             </div>
 
+            {availableServiceOptions.length === 0 &&
+              !loading &&
+              services.length > 0 && (
+                <p className="mt-1 text-xs text-amber-600">
+                  No hay servicios disponibles para asignar
+                </p>
+              )}
+
             {/* List of added services */}
             <div className="mt-2 space-y-2">
-              {selectedServices.map((service, index) => (
+              {selectedServices.map((serviceId, index) => (
                 <div
                   key={index}
                   className="flex items-center justify-between rounded-md border p-2"
                 >
-                  <span>{service}</span>
+                  <span>{getServiceTitle(serviceId)}</span>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleRemoveService(service)}
+                    onClick={() => handleRemoveService(serviceId)}
                     className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
                   >
                     <X size={16} />

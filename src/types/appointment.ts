@@ -14,6 +14,7 @@ export interface Appointment {
   disability: boolean;
   reason?: string;
   recommendations?: string;
+  userId?: string; // Firebase user ID
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -31,4 +32,5 @@ export interface AppointmentFormData {
   disability: boolean;
   reason?: string;
   recommendations?: string;
+  userId?: string; // Firebase user ID
 }
