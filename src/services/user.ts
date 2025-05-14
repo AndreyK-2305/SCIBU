@@ -1,6 +1,14 @@
 import { FirebaseError } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, Timestamp } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  Timestamp,
+  collection,
+  getDocs,
+} from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 
@@ -181,5 +189,33 @@ export async function isUserAdmin(userId: string): Promise<boolean> {
   } catch (error) {
     console.error("Error checking admin status:", error);
     return false;
+  }
+}
+
+// Function to get all registered users
+export async function getAllUsers(): Promise<Array<UserData & { id: string }>> {
+  try {
+    const usersCollection = collection(db, "users");
+    const querySnapshot = await getDocs(usersCollection);
+
+    const users: Array<UserData & { id: string }> = [];
+
+    querySnapshot.forEach((doc) => {
+      const userData = doc.data() as UserData;
+      users.push({
+        ...userData,
+        id: doc.id,
+      });
+    });
+
+    // Sort users by name for easier selection
+    return users.sort((a, b) => {
+      const nameA = a.fullName || a.email || "";
+      const nameB = b.fullName || b.email || "";
+      return nameA.localeCompare(nameB);
+    });
+  } catch (error) {
+    console.error("Error fetching all users:", error);
+    return [];
   }
 }

@@ -208,7 +208,7 @@ export default function DatosPersonales() {
 
             <div className="grid grid-cols-[120px_1fr] gap-2">
               <div>
-                <Label htmlFor="documentType">Documento de identidad</Label>
+                <Label htmlFor="documentType">Documento</Label>
                 <Select value={documentType} onValueChange={setDocumentType}>
                   <SelectTrigger id="documentType" className="mt-1">
                     <SelectValue placeholder="Tipo" />

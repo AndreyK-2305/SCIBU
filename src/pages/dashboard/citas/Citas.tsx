@@ -29,6 +29,7 @@ import { Service } from "@/types/service";
 
 import AppointmentForm from "./components/AppointmentForm";
 import AppointmentStatusModal from "./components/AppointmentStatusModal";
+import RescheduleAppointmentModal from "./components/RescheduleAppointmentModal";
 
 export default function Citas() {
   // Authentication
@@ -42,9 +43,7 @@ export default function Citas() {
   const [error, setError] = useState<string | null>(null);
 
   // Filter state
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
-    new Date(),
-  );
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<AppointmentStatus | "all">(
     "all",
@@ -59,6 +58,11 @@ export default function Citas() {
   const [activeTab, setActiveTab] = useState("upcoming");
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] =
+    useState<Appointment | null>(null);
+
+  // Reschedule Modal state
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
+  const [appointmentToReschedule, setAppointmentToReschedule] =
     useState<Appointment | null>(null);
 
   // Check if user is admin
@@ -112,11 +116,43 @@ export default function Citas() {
     loadData();
   }, [user, isAdmin]);
 
+  // Refresh services when form is opened
+  useEffect(() => {
+    const refreshServices = async () => {
+      if (isFormOpen) {
+        try {
+          const loadedServices = await getAllServices();
+          setServices(loadedServices);
+        } catch (error) {
+          console.error("Error refreshing services:", error);
+          toast.error("Error al actualizar los servicios");
+        }
+      }
+    };
+
+    refreshServices();
+  }, [isFormOpen]);
+
   // Apply filters
   useEffect(() => {
     if (!appointments) return;
 
     let filtered = [...appointments];
+
+    // Apply tab filter first (must always be applied)
+    if (activeTab === "upcoming") {
+      filtered = filtered.filter(
+        (appointment) =>
+          appointment.date >= new Date() && appointment.status === "pendiente",
+      );
+    } else if (activeTab === "past") {
+      filtered = filtered.filter(
+        (appointment) =>
+          appointment.date < new Date() ||
+          appointment.status === "realizado" ||
+          appointment.status === "cancelado",
+      );
+    }
 
     // Filter by date if selected
     if (selectedDate) {
@@ -155,21 +191,6 @@ export default function Citas() {
       );
     }
 
-    // Filter by tab
-    if (activeTab === "upcoming") {
-      filtered = filtered.filter(
-        (appointment) =>
-          appointment.date >= new Date() && appointment.status === "pendiente",
-      );
-    } else if (activeTab === "past") {
-      filtered = filtered.filter(
-        (appointment) =>
-          appointment.date < new Date() ||
-          appointment.status === "realizado" ||
-          appointment.status === "cancelado",
-      );
-    }
-
     setFilteredAppointments(filtered);
   }, [
     appointments,
@@ -191,6 +212,12 @@ export default function Citas() {
   const handleUpdateStatus = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
     setIsStatusModalOpen(true);
+  };
+
+  // Handle opening the reschedule modal
+  const handleReschedule = (appointment: Appointment) => {
+    setAppointmentToReschedule(appointment);
+    setIsRescheduleModalOpen(true);
   };
 
   // Handle appointment status update
@@ -230,6 +257,20 @@ export default function Citas() {
       console.error("Error updating appointment status:", error);
       toast.error("Error al actualizar el estado de la cita");
     }
+  };
+
+  // Handle appointment rescheduled
+  const handleAppointmentRescheduled = (updatedAppointment: Appointment) => {
+    // Update appointment in local state
+    const updatedAppointments = appointments.map((appointment) =>
+      appointment.id === updatedAppointment.id
+        ? updatedAppointment
+        : appointment,
+    );
+
+    setAppointments(updatedAppointments);
+    setIsRescheduleModalOpen(false);
+    setAppointmentToReschedule(null);
   };
 
   // Helper function to get status label
@@ -360,6 +401,7 @@ export default function Citas() {
                     appointment={appointment}
                     onUpdateStatus={handleUpdateStatus}
                     isAdmin={isAdmin}
+                    onReschedule={handleReschedule}
                   />
                 ))
               )}
@@ -386,6 +428,7 @@ export default function Citas() {
                     appointment={appointment}
                     onUpdateStatus={handleUpdateStatus}
                     isAdmin={isAdmin}
+                    onReschedule={handleReschedule}
                   />
                 ))
               )}
@@ -401,7 +444,18 @@ export default function Citas() {
             selected={selectedDate}
             onSelect={setSelectedDate}
             className="rounded-md border"
+            showOutsideDays
           />
+          <div className="mt-2 flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-gray-500"
+              onClick={() => setSelectedDate(undefined)}
+            >
+              Limpiar selección
+            </Button>
+          </div>
           <div className="mt-4">
             <h3 className="mb-2 text-sm font-medium">Resumen del día</h3>
             {filteredAppointments.length > 0 ? (
@@ -410,16 +464,18 @@ export default function Citas() {
                   <span className="font-medium">
                     {filteredAppointments.length}
                   </span>{" "}
-                  cita(s) para{" "}
-                  <span className="font-medium">
-                    {selectedDate ? formatAppointmentDate(selectedDate) : "hoy"}
-                  </span>
+                  cita(s){" "}
+                  {selectedDate
+                    ? `para ${formatAppointmentDate(selectedDate)}`
+                    : "en total"}
                 </p>
               </div>
             ) : (
               <p className="text-sm text-gray-500">
-                No hay citas para{" "}
-                {selectedDate ? formatAppointmentDate(selectedDate) : "hoy"}
+                No hay citas{" "}
+                {selectedDate
+                  ? `para ${formatAppointmentDate(selectedDate)}`
+                  : ""}
               </p>
             )}
           </div>
@@ -448,6 +504,19 @@ export default function Citas() {
           appointment={selectedAppointment}
         />
       )}
+
+      {/* Reschedule Modal */}
+      {isRescheduleModalOpen && appointmentToReschedule && (
+        <RescheduleAppointmentModal
+          isOpen={isRescheduleModalOpen}
+          onClose={() => {
+            setIsRescheduleModalOpen(false);
+            setAppointmentToReschedule(null);
+          }}
+          appointment={appointmentToReschedule}
+          onAppointmentRescheduled={handleAppointmentRescheduled}
+        />
+      )}
     </div>
   );
 }
@@ -457,12 +526,14 @@ interface AppointmentCardProps {
   appointment: Appointment;
   onUpdateStatus: (appointment: Appointment) => void;
   isAdmin: boolean;
+  onReschedule: (appointment: Appointment) => void;
 }
 
 function AppointmentCard({
   appointment,
   onUpdateStatus,
   isAdmin,
+  onReschedule,
 }: AppointmentCardProps) {
   const { date, time, requesterName, specialistName, serviceType, status } =
     appointment;
@@ -533,6 +604,15 @@ function AppointmentCard({
       {/* Action buttons */}
       {(status === "pendiente" || isAdmin) && (
         <div className="mt-4 flex justify-end space-x-2">
+          {status === "pendiente" && (
+            <Button
+              variant="outline"
+              onClick={() => onReschedule(appointment)}
+              className="text-sm"
+            >
+              Reprogramar cita
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={() => onUpdateStatus(appointment)}

@@ -16,6 +16,7 @@ import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -29,6 +30,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Popover,
   PopoverContent,
@@ -50,7 +52,12 @@ import {
   getSchedulesBySpecialistId,
 } from "@/services/schedule";
 import { getAllSpecialists } from "@/services/specialist";
-import { getUserData } from "@/services/user";
+import {
+  getAllUsers,
+  getUserData,
+  isUserAdmin,
+  UserData,
+} from "@/services/user";
 import { Appointment, AppointmentFormData } from "@/types/appointment";
 import { Schedule } from "@/types/schedule";
 import { Service } from "@/types/service";
@@ -81,16 +88,36 @@ export default function AppointmentForm({
   const [serviceSpecialistsMap, setServiceSpecialistsMap] = useState<
     Record<string, Specialist[]>
   >({});
-  const initialized = useRef(false);
+  const [userName, setUserName] = useState<string>("");
 
-  // Load specialists and their schedules
+  // Admin-specific state
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [registeredUsers, setRegisteredUsers] = useState<
+    Array<UserData & { id: string }>
+  >([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+
+  // Load specialists and their schedules whenever the modal is opened
   useEffect(() => {
     const loadData = async () => {
-      if (isOpen && !initialized.current) {
+      if (isOpen) {
         console.log("Loading data for appointment form, isOpen:", isOpen);
         setLoadingData(true);
         try {
           console.log("Services passed to AppointmentForm:", services);
+
+          // Check if user is admin
+          if (user) {
+            const adminStatus = await isUserAdmin(user.uid);
+            setIsAdmin(adminStatus);
+
+            // If admin, load all registered users
+            if (adminStatus) {
+              const users = await getAllUsers();
+              setRegisteredUsers(users);
+              setSelectedUserId(""); // Reset selection
+            }
+          }
 
           // Get all specialists
           const loadedSpecialists = await getAllSpecialists();
@@ -125,7 +152,35 @@ export default function AppointmentForm({
 
           console.log("Final service-specialists mapping:", specialistsMap);
           setServiceSpecialistsMap(specialistsMap);
-          initialized.current = true;
+
+          // Reset form selections when modal is opened
+          setSelectedService("");
+          setSelectedSpecialist("");
+          setSelectedDate(new Date());
+          setTimeOptions([]);
+          form.reset();
+
+          // Load user data for auto-filling
+          if (user) {
+            const userData = await getUserData(user.uid);
+            if (userData?.fullName) {
+              setUserName(userData.fullName);
+              form.setValue("requesterName", userData.fullName);
+            }
+
+            // Set requesterType based on user status if available
+            if (userData?.status) {
+              const statusMap: Record<string, string> = {
+                Estudiante: "estudiante",
+                Docente: "docente",
+                Administrativo: "administrativo",
+              };
+              const requesterType = statusMap[userData.status] || "estudiante";
+              form.setValue("requesterType", requesterType);
+            } else {
+              form.setValue("requesterType", "estudiante"); // Default to student
+            }
+          }
         } catch (error) {
           console.error("Error loading specialists:", error);
           toast.error("Error al cargar los especialistas");
@@ -136,14 +191,38 @@ export default function AppointmentForm({
     };
 
     loadData();
-  }, [isOpen, services]);
+  }, [isOpen, services, user]);
 
-  // Reset initialized flag when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      initialized.current = false;
+  // Handle user selection (for admins only)
+  const handleUserSelect = async (userId: string) => {
+    setSelectedUserId(userId);
+
+    if (userId) {
+      try {
+        const userData = await getUserData(userId);
+        if (userData) {
+          // Update form with selected user's name
+          form.setValue(
+            "requesterName",
+            userData.fullName || userData.email || "",
+          );
+
+          // Update form with selected user's type
+          if (userData.status) {
+            const statusMap: Record<string, string> = {
+              Estudiante: "estudiante",
+              Docente: "docente",
+              Administrativo: "administrativo",
+            };
+            const requesterType = statusMap[userData.status] || "estudiante";
+            form.setValue("requesterType", requesterType);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching selected user data:", error);
+      }
     }
-  }, [isOpen]);
+  };
 
   // Load specialist schedules when a specialist is selected
   useEffect(() => {
@@ -188,14 +267,14 @@ export default function AppointmentForm({
         const startTime = parse(schedule.startTime, "HH:mm", new Date());
         const endTime = parse(schedule.endTime, "HH:mm", new Date());
 
-        // Generate 30-minute slots
+        // Generate 20-minute slots (changed from 30 minutes)
         let currentSlot = startTime;
         while (currentSlot < endTime) {
           const formattedTime = format(currentSlot, "h:mm a");
           times.push(formattedTime);
 
-          // Add 30 minutes for next slot
-          currentSlot = new Date(currentSlot.getTime() + 30 * 60000);
+          // Add 20 minutes for next slot
+          currentSlot = new Date(currentSlot.getTime() + 20 * 60000);
         }
       });
 
@@ -217,7 +296,7 @@ export default function AppointmentForm({
     defaultValues: {
       date: new Date(),
       time: "",
-      requesterName: "",
+      requesterName: userName || "",
       requesterType: "estudiante",
       serviceType: "",
       specialistId: "",
@@ -289,18 +368,19 @@ export default function AppointmentForm({
 
     setLoading(true);
     try {
-      // Get user data if available
-      const userData = await getUserData(user.uid);
-
-      // Populate requesterName if not provided
-      if (!data.requesterName && userData?.fullName) {
-        data.requesterName = userData.fullName;
+      // Ensure requesterName is set with the user's name
+      if (!data.requesterName && userName) {
+        data.requesterName = userName;
       }
+
+      // For admins, use selected user's ID if available
+      const effectiveUserId =
+        isAdmin && selectedUserId ? selectedUserId : user.uid;
 
       // Add user ID to the appointment data
       const appointmentData = {
         ...data,
-        userId: user.uid,
+        userId: effectiveUserId,
       };
 
       // Create appointment in Firebase
@@ -321,299 +401,139 @@ export default function AppointmentForm({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Agendar Cita</DialogTitle>
-          <DialogDescription>
-            Complete el formulario para agendar una nueva cita.
-          </DialogDescription>
+          <DialogTitle>Programar Cita</DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            {/* Date and Time */}
-            <div className="grid grid-cols-2 gap-4">
-              {/* Date Picker */}
-              <FormField
-                control={form.control}
-                name="date"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Fecha</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className="w-full pl-3 text-left font-normal"
-                            disabled={!selectedSpecialist || loadingData}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP", { locale: es })
-                            ) : (
-                              <span>Seleccionar fecha</span>
-                            )}
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={(date) => {
-                            if (date) {
-                              field.onChange(date);
-                              setSelectedDate(date);
-                              form.setValue("time", ""); // Reset time when date changes
-                            }
-                          }}
-                          disabled={(date) =>
-                            date < new Date() || !hasSchedulesForDate(date)
-                          }
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* Admin-only: User Selection */}
+            {isAdmin && (
+              <FormItem>
+                <FormLabel>Usuario para la cita</FormLabel>
+                <Select value={selectedUserId} onValueChange={handleUserSelect}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Seleccionar usuario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {registeredUsers.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.fullName || user.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Seleccione el usuario para el cual se agendará esta cita
+                </p>
+              </FormItem>
+            )}
 
-              {/* Time */}
-              <FormField
-                control={form.control}
-                name="time"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Hora</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                      disabled={timeOptions.length === 0 || loadingData}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar hora" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {timeOptions.length > 0 ? (
-                          timeOptions.map((time) => (
-                            <SelectItem key={time} value={time}>
-                              {time}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <SelectItem value="no-options" disabled>
-                            {loadingData
-                              ? "Cargando horarios..."
-                              : !selectedSpecialist
-                                ? "Primero seleccione un especialista"
-                                : "No hay horarios disponibles"}
-                          </SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Service and Specialist */}
-            <div className="grid grid-cols-2 gap-4">
-              {/* Service Type */}
-              <FormField
-                control={form.control}
-                name="serviceType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Servicio</FormLabel>
-                    <Select
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                        handleServiceChange(value);
-                      }}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar servicio" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {services
-                          .filter((service) => service.isActive)
-                          .map((service) => (
-                            <SelectItem key={service.id} value={service.title}>
-                              {service.title}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Requester Name */}
-              <FormField
-                control={form.control}
-                name="requesterName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre</FormLabel>
+            {/* Service */}
+            <FormField
+              control={form.control}
+              name="serviceType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Servicio</FormLabel>
+                  <Select
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      handleServiceChange(value);
+                    }}
+                    value={field.value}
+                  >
                     <FormControl>
-                      <Input placeholder="Nombre completo" {...field} />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar servicio" />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    <SelectContent>
+                      {services
+                        .filter((service) => service.isActive)
+                        .map((service) => (
+                          <SelectItem key={service.id} value={service.title}>
+                            {service.title}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-              {/* Requester Type */}
-              <FormField
-                control={form.control}
-                name="requesterType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Estamento</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar estamento" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="estudiante">Estudiante</SelectItem>
-                        <SelectItem value="docente">Docente</SelectItem>
-                        <SelectItem value="administrativo">
-                          Administrativo
-                        </SelectItem>
-                        <SelectItem value="externo">Externo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Specialist */}
-              <FormField
-                control={form.control}
-                name="specialistId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Especialista</FormLabel>
-                    <Select
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                        handleSpecialistChange(value);
-                      }}
-                      value={field.value}
-                      disabled={!selectedService}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar especialista" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {selectedService ? (
-                          getSpecialistsForService(selectedService).length >
-                          0 ? (
-                            getSpecialistsForService(selectedService).map(
-                              (specialist) => (
-                                <SelectItem
-                                  key={specialist.id}
-                                  value={specialist.id}
-                                >
-                                  {specialist.name}
-                                </SelectItem>
-                              ),
-                            )
-                          ) : (
-                            <SelectItem value="no-specialists" disabled>
-                              No hay especialistas disponibles
-                            </SelectItem>
+            {/* Specialist Selection */}
+            <FormField
+              control={form.control}
+              name="specialistId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Especialista</FormLabel>
+                  <Select
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      handleSpecialistChange(value);
+                    }}
+                    value={field.value}
+                    disabled={!selectedService || loadingData}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar especialista" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {selectedService ? (
+                        getSpecialistsForService(selectedService).length > 0 ? (
+                          getSpecialistsForService(selectedService).map(
+                            (specialist) => (
+                              <SelectItem
+                                key={specialist.id}
+                                value={specialist.id}
+                              >
+                                {specialist.name}
+                              </SelectItem>
+                            ),
                           )
                         ) : (
-                          <SelectItem value="select-service" disabled>
-                            Primero seleccione un servicio
+                          <SelectItem value="no-specialists" disabled>
+                            No hay especialistas disponibles
                           </SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                        )
+                      ) : (
+                        <SelectItem value="no-service" disabled>
+                          Primero seleccione un servicio
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-            {/* First Time and Disability */}
-            <div className="grid grid-cols-2 gap-4">
-              {/* Is First Time */}
-              <FormField
-                control={form.control}
-                name="isFirstTime"
-                render={({ field }) => (
-                  <FormItem className="space-y-2">
-                    <FormLabel>¿Primera vez?</FormLabel>
-                    <FormControl>
-                      <RadioGroup
-                        onValueChange={(value) =>
-                          field.onChange(value === "true")
-                        }
-                        defaultValue={field.value ? "true" : "false"}
-                        className="flex space-x-4"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="true" id="firstTimeYes" />
-                          <label htmlFor="firstTimeYes">Sí</label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="false" id="firstTimeNo" />
-                          <label htmlFor="firstTimeNo">No</label>
-                        </div>
-                      </RadioGroup>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* Disability Checkbox */}
+            <FormField
+              control={form.control}
+              name="disability"
+              render={({ field }) => (
+                <FormItem className="flex items-center space-x-2">
+                  <FormControl>
+                    <input
+                      type="checkbox"
+                      checked={field.value}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </FormControl>
+                  <FormLabel className="font-normal">Incapacidad</FormLabel>
+                </FormItem>
+              )}
+            />
 
-              {/* Disability */}
-              <FormField
-                control={form.control}
-                name="disability"
-                render={({ field }) => (
-                  <FormItem className="space-y-2">
-                    <FormLabel>¿Tiene alguna discapacidad?</FormLabel>
-                    <FormControl>
-                      <RadioGroup
-                        onValueChange={(value) =>
-                          field.onChange(value === "true")
-                        }
-                        defaultValue={field.value ? "true" : "false"}
-                        className="flex space-x-4"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="true" id="disabilityYes" />
-                          <label htmlFor="disabilityYes">Sí</label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="false" id="disabilityNo" />
-                          <label htmlFor="disabilityNo">No</label>
-                        </div>
-                      </RadioGroup>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Reason */}
+            {/* Reason for consultation */}
             <FormField
               control={form.control}
               name="reason"
@@ -622,9 +542,9 @@ export default function AppointmentForm({
                   <FormLabel>Motivo de la consulta</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="Describa brevemente el motivo de su consulta"
-                      className="resize-none"
+                      placeholder="Escriba aquí..."
                       {...field}
+                      className="min-h-[120px]"
                     />
                   </FormControl>
                   <FormMessage />
@@ -632,15 +552,137 @@ export default function AppointmentForm({
               )}
             />
 
-            {/* Form buttons */}
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancelar
-              </Button>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {/* Calendar Column */}
+              <div>
+                <FormField
+                  control={form.control}
+                  name="date"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <div className="mb-2 flex items-center justify-between">
+                        <FormLabel>Fecha</FormLabel>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs text-indigo-600"
+                          onClick={() => field.onChange(new Date())}
+                        >
+                          Hoy
+                        </Button>
+                      </div>
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={(date) => {
+                          if (date) {
+                            field.onChange(date);
+                            setSelectedDate(date);
+                            form.setValue("time", ""); // Reset time when date changes
+                          }
+                        }}
+                        disabled={(date) =>
+                          date < new Date() ||
+                          !hasSchedulesForDate(date) ||
+                          !selectedSpecialist
+                        }
+                        className="rounded-md border"
+                        initialFocus
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Time Selection Column */}
+              <div>
+                <FormField
+                  control={form.control}
+                  name="time"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Listado de horarios</FormLabel>
+                      <div className="h-[340px] space-y-2 overflow-y-auto pr-2">
+                        {loadingData ? (
+                          <div className="flex h-full items-center justify-center">
+                            <div className="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-indigo-600"></div>
+                            <span className="ml-2">Cargando horarios...</span>
+                          </div>
+                        ) : timeOptions.length > 0 ? (
+                          <RadioGroup
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            className="space-y-2"
+                          >
+                            {timeOptions.map((time) => (
+                              <div
+                                key={time}
+                                className="flex items-center space-x-2 rounded-md border p-3"
+                              >
+                                <RadioGroupItem
+                                  value={time}
+                                  id={`time-${time}`}
+                                />
+                                <Label htmlFor={`time-${time}`}>{time}</Label>
+                              </div>
+                            ))}
+                          </RadioGroup>
+                        ) : (
+                          <div className="flex h-full items-center justify-center">
+                            <p className="text-center text-gray-500">
+                              {!selectedSpecialist
+                                ? "Seleccione un especialista para ver horarios disponibles"
+                                : selectedDate
+                                  ? "No hay horarios disponibles para esta fecha"
+                                  : "Seleccione una fecha para ver horarios disponibles"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Hidden Fields */}
+            <FormField
+              control={form.control}
+              name="requesterName"
+              render={({ field }) => <input type="hidden" {...field} />}
+            />
+
+            <FormField
+              control={form.control}
+              name="requesterType"
+              render={({ field }) => <input type="hidden" {...field} />}
+            />
+
+            <FormField
+              control={form.control}
+              name="isFirstTime"
+              render={({ field }) => (
+                <input
+                  type="hidden"
+                  {...field}
+                  value={field.value.toString()}
+                />
+              )}
+            />
+
+            <div className="flex justify-center">
               <Button
                 type="submit"
-                className="bg-indigo-600 hover:bg-indigo-700"
-                disabled={loading || !timeOptions.length}
+                disabled={
+                  loading ||
+                  !selectedDate ||
+                  !form.watch("time") ||
+                  !selectedSpecialist
+                }
+                className="bg-indigo-600 px-12 hover:bg-indigo-700"
               >
                 {loading ? (
                   <>
@@ -648,10 +690,10 @@ export default function AppointmentForm({
                       icon="ph:spinner"
                       className="mr-2 h-4 w-4 animate-spin"
                     />
-                    Creando...
+                    Procesando...
                   </>
                 ) : (
-                  "Agendar Cita"
+                  "Enviar"
                 )}
               </Button>
             </div>

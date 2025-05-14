@@ -111,7 +111,7 @@ export default function DatosPersonalesForm({
         />
 
         <div>
-          Documento de Identidad
+          Documento
           <div className="mt-1 flex items-end gap-2">
             {tiposDocumento && (
               <FormSelect
