@@ -7,18 +7,15 @@ import {
   Info,
   FilePlus,
 } from "lucide-react";
-import React, { useState } from "react";
+import { useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Appointment, AppointmentStatus } from "@/types/appointment";
 
 interface AppointmentCardProps {
   appointment: Appointment;
-  onUpdateStatus: (
-    id: string,
-    status: AppointmentStatus,
-    recommendations?: string,
-  ) => void;
+  // onUpdateStatus: () => void; // Comentado porque no se usa
   onOpenStatusModal: (appointment: Appointment) => void;
   onReschedule: (appointment: Appointment) => void;
   onCancel: (appointment: Appointment) => void;
@@ -26,7 +23,7 @@ interface AppointmentCardProps {
 
 export default function AppointmentCard({
   appointment,
-  onUpdateStatus,
+  // onUpdateStatus, // Comentado porque no se usa
   onOpenStatusModal,
   onReschedule,
   onCancel,

@@ -1,4 +1,4 @@
-import { format, addDays } from "date-fns";
+import { addDays } from "date-fns";
 import { es } from "date-fns/locale";
 import React, { useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -26,7 +26,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import useAuth from "@/hooks/useAuth";
 import { createAppointment } from "@/services/appointment";
-import { getSchedulesByDate } from "@/services/schedule";
+import {
+  getScheduleById,
+  getSchedulesBySpecialistId,
+} from "@/services/schedule";
 import { getAllServices } from "@/services/service";
 import { getAllSpecialists } from "@/services/specialist";
 import { getUserData } from "@/services/user";
@@ -186,12 +189,17 @@ export default function CreateAppointmentModal({
       setLoading(true);
 
       // Get all schedules for this date
-      const schedules = await getSchedulesByDate(date);
+      const schedules = await getSchedulesBySpecialistId(selectedSpecialist);
 
       // Filter schedules for the selected specialist
-      const specialistSchedules = schedules.filter(
-        (schedule) => schedule.specialistId === selectedSpecialist,
-      );
+      const specialistSchedules = schedules.filter((schedule) => {
+        const scheduleDate = new Date(schedule.date);
+        return (
+          scheduleDate.getDate() === date.getDate() &&
+          scheduleDate.getMonth() === date.getMonth() &&
+          scheduleDate.getFullYear() === date.getFullYear()
+        );
+      });
 
       // Generate time slots from schedule start and end times
       const timeSlots = specialistSchedules.reduce(
@@ -304,7 +312,7 @@ export default function CreateAppointmentModal({
       // Create appointment object
       const newAppointment: Omit<
         Appointment,
-        "id" | "status" | "createdAt" | "updatedAt"
+        "id" | "createdAt" | "updatedAt"
       > = {
         date: selectedDate,
         time: selectedTime,
@@ -320,6 +328,7 @@ export default function CreateAppointmentModal({
         isFirstTime: true, // Assume first time
         disability: disability,
         reason: reason,
+        status: "pendiente", // Agregar el estado pendiente por defecto
       };
 
       // Create appointment
