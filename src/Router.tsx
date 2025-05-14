@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { HashRouter, Routes, Route, Navigate } from "react-router";
 
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -25,7 +25,8 @@ import Components from "@/pages/dev/Components";
 import { getUserData } from "@/services/user";
 import { ADMIN_CREDENTIALS } from "@/utils/adminInfo";
 
-export default function Router() {
+// We separate the router content to ensure useAuth and useNavigate work properly
+function RouterContent() {
   const { user } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -63,69 +64,75 @@ export default function Router() {
   }
 
   return (
-    <HashRouter>
-      <Routes>
-        <Route index element={<Navigate to="/dashboard" />} />
+    <Routes>
+      <Route index element={<Navigate to="/dashboard" />} />
 
-        {/* Admin Dashboard Routes */}
-        {isAdmin ? (
-          <Route
-            path="dashboard"
-            element={
-              <ProtectedRoute>
-                <DashboardLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Home />} />
-            <Route path="datos-personales" element={<DatosPersonales />} />
-            <Route path="servicios" element={<Servicios />} />
-            <Route path="especialistas" element={<Especialistas />} />
-            <Route path="horarios" element={<Horarios />} />
-            <Route path="citas" element={<Citas />} />
-            <Route path="datos" element={<Datos />} />
-          </Route>
-        ) : (
-          // User Dashboard Routes
-          <Route
-            path="dashboard"
-            element={
-              <ProtectedRoute>
-                <UserDashboardLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Home />} />
-            <Route path="datos-personales" element={<DatosPersonales />} />
-            <Route path="citas" element={<Citas />} />
-            <Route path="consultar-usuario" element={<ConsultarUsuario />} />
-          </Route>
-        )}
-
+      {/* Admin Dashboard Routes */}
+      {isAdmin ? (
         <Route
-          path="auth"
+          path="dashboard"
           element={
-            <ProtectedRoute
-              elemOnDeny={<CardLayout />}
-              elemOnAllow={<Navigate to="/dashboard" />}
-            />
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="login" />} />
-          <Route path="login" element={<Login />} />
-          <Route path="register" element={<Register />} />
-          <Route path="password-recovery" element={<PasswordRecovery />} />
-          <Route path="action" element={<Action />} />
-          <Route path="complete-profile" element={<CompleteProfile />} />
+          <Route index element={<Home />} />
+          <Route path="datos-personales" element={<DatosPersonales />} />
+          <Route path="servicios" element={<Servicios />} />
+          <Route path="especialistas" element={<Especialistas />} />
+          <Route path="horarios" element={<Horarios />} />
+          <Route path="citas" element={<Citas />} />
+          <Route path="datos" element={<Datos />} />
         </Route>
+      ) : (
+        // User Dashboard Routes
+        <Route
+          path="dashboard"
+          element={
+            <ProtectedRoute>
+              <UserDashboardLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Home />} />
+          <Route path="datos-personales" element={<DatosPersonales />} />
+          <Route path="citas" element={<Citas />} />
+          <Route path="consultar-usuario" element={<ConsultarUsuario />} />
+        </Route>
+      )}
 
-        {/* Ruta oculta para configuración de administrador - acceso público para setup inicial */}
-        <Route path="admin-setup" element={<SuperAdminSetup />} />
+      <Route
+        path="auth"
+        element={
+          <ProtectedRoute
+            elemOnDeny={<CardLayout />}
+            elemOnAllow={<Navigate to="/dashboard" />}
+          />
+        }
+      >
+        <Route index element={<Navigate to="login" />} />
+        <Route path="login" element={<Login />} />
+        <Route path="register" element={<Register />} />
+        <Route path="password-recovery" element={<PasswordRecovery />} />
+        <Route path="action" element={<Action />} />
+        <Route path="complete-profile" element={<CompleteProfile />} />
+      </Route>
 
-        {MODE === "development" && (
-          <Route path="dev/components" element={<Components />} />
-        )}
-      </Routes>
+      {/* Ruta oculta para configuración de administrador - acceso público para setup inicial */}
+      <Route path="admin-setup" element={<SuperAdminSetup />} />
+
+      {MODE === "development" && (
+        <Route path="dev/components" element={<Components />} />
+      )}
+    </Routes>
+  );
+}
+
+export default function Router() {
+  return (
+    <HashRouter>
+      <RouterContent />
     </HashRouter>
   );
 }

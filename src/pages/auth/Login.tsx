@@ -8,7 +8,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc, Firestore } from "firebase/firestore";
 import { useForm } from "react-hook-form";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -30,6 +30,7 @@ import { ADMIN_CREDENTIALS } from "@/utils/adminInfo";
 
 export default function Login() {
   const { auth } = useAuth();
+  const navigate = useNavigate();
 
   const formSchema = z.object({
     email: z.string().email("El correo no es válido"),
@@ -90,6 +91,14 @@ export default function Login() {
           "Inicio de sesión exitoso, pero hay problemas con el acceso a datos",
         );
       }
+
+      // Mostrar mensaje de éxito
+      toast.success("Inicio de sesión exitoso");
+
+      // Redirigir al dashboard después de un inicio de sesión exitoso
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 500);
     } catch (error) {
       console.error("Error completo de inicio de sesión:", error);
 
@@ -125,6 +134,12 @@ export default function Login() {
           "Inicio de sesión exitoso, pero hay problemas con el acceso a datos",
         );
       }
+
+      // Mostrar mensaje de éxito y redirigir
+      toast.success("Inicio de sesión con Google exitoso");
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 500);
     } catch (error) {
       console.error("Error completo de Google login:", error);
 
@@ -247,6 +262,11 @@ export default function Login() {
                       toast.success(
                         "Inicio de sesión como administrador exitoso",
                       );
+
+                      // Redirigir al dashboard después de login admin exitoso
+                      setTimeout(() => {
+                        navigate("/dashboard");
+                      }, 500);
                     } catch (error) {
                       console.error("Error en inicio de sesión admin:", error);
 

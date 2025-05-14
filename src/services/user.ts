@@ -106,12 +106,18 @@ export async function createUserData(
 ): Promise<void> {
   try {
     const now = Timestamp.now();
+    // Determine if this is a basic profile (with empty required fields) or a complete profile
+    const isBasicProfile =
+      !data.documentNumber || !data.birthDate || !data.phone;
+
     const userData = {
       ...data,
       createdAt: now,
       updatedAt: now,
-      isProfileComplete: true,
+      isProfileComplete: !isBasicProfile, // Set to false for basic profiles that need completion
     };
+
+    console.log(`Creating user data with isProfileComplete=${!isBasicProfile}`);
     await setDoc(doc(db, "users", userId), userData);
   } catch (error) {
     console.error("Error creating user data:", error);

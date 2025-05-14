@@ -21,52 +21,50 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
+    label: "Inicio",
+    icon: "material-symbols:home-outline",
+    url: "/dashboard",
+  },
+  {
     label: "Datos Personales",
     icon: "material-symbols:database-outline",
-    url: "datos-personales",
+    url: "/dashboard/datos-personales",
   },
   {
     label: "Servicios",
     icon: "material-symbols:home-repair-service-outline",
-    url: "servicios",
+    url: "/dashboard/servicios",
   },
   {
     label: "Especialistas",
     icon: "ph:users",
-    url: "especialistas",
+    url: "/dashboard/especialistas",
   },
   {
     label: "Horarios",
     icon: "material-symbols:schedule",
-    url: "horarios",
+    url: "/dashboard/horarios",
   },
   {
     label: "Citas",
     icon: "material-symbols:calendar-month",
-    url: "citas",
+    url: "/dashboard/citas",
   },
   {
     label: "Datos",
     icon: "material-symbols:database-outline",
-    url: "datos",
+    url: "/dashboard/datos",
   },
 ];
 
 export default function Sidebar() {
-  const { auth } = useAuth();
+  const { logout } = useAuth();
   const { pathname } = useLocation();
 
-  const currentItemPath = pathname.split("/")[2];
-  const currentNavItem =
-    currentItemPath?.length > 0
-      ? navItems.find((item) => item.url === currentItemPath)
-      : undefined;
+  // Compare current path with navigation items
+  const currentNavItem = navItems.find((item) => pathname === item.url);
 
   const [collapsed, setCollapsed] = useState(true);
-
-  async function handleLogout() {
-    await auth.signOut();
-  }
 
   return (
     <>
@@ -103,10 +101,10 @@ export default function Sidebar() {
               <Icon icon="mingcute:user-4-fill" className="size-6" />
             </PopoverTrigger>
             <PopoverContent className="w-fit">
-              <p className="text-center font-bold">Juan Afanador</p>
+              <p className="text-center font-bold">Administrador</p>
               <p className="text-center text-sm">ADMIN</p>
               <Separator className="my-4" />
-              <Button variant="outline" onClick={handleLogout}>
+              <Button variant="outline" onClick={logout}>
                 Cerrar Sesión
               </Button>
             </PopoverContent>
@@ -119,7 +117,7 @@ export default function Sidebar() {
                 variant="ghost"
                 className={cn(
                   "w-full justify-start has-[>svg]:p-0",
-                  currentNavItem === item && "bg-neutral-100 text-neutral-900",
+                  pathname === item.url && "bg-neutral-100 text-neutral-900",
                   collapsed && "w-9",
                 )}
                 onClick={() => {

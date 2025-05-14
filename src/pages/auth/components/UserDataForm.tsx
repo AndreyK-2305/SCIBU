@@ -27,6 +27,7 @@ import {
 import useAuth from "@/hooks/useAuth";
 import { useRegister } from "@/hooks/useRegister";
 import { updateUserData, UserData } from "@/services/user";
+import { getUserData } from "@/services/user";
 
 interface UserDataFormProps {
   email?: string;
@@ -122,13 +123,32 @@ export default function UserDataForm({
         navigate("/auth/login");
       } else if (user?.uid) {
         // Modo completar perfil: solo actualizar datos
+        console.log("Actualizando perfil con isProfileComplete=true");
+
+        // Actualizar explícitamente con isProfileComplete en true
         await updateUserData(user.uid, {
           ...profileData,
           isProfileComplete: true,
         });
+
+        // Verificar que los datos se guardaron correctamente
+        const updatedData = await getUserData(user.uid);
+        console.log("Datos actualizados:", updatedData);
+
+        if (!updatedData?.isProfileComplete) {
+          console.warn(
+            "isProfileComplete sigue siendo false después de la actualización",
+          );
+          // Intentar actualizar de nuevo solo el flag isProfileComplete
+          await updateUserData(user.uid, { isProfileComplete: true });
+        }
+
         toast.success("Perfil actualizado correctamente");
-        // Esperar un momento para mostrar "Finalizado"
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // Esperar un momento para asegurar que los datos se guarden completamente
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+
+        // Redirigir al dashboard
         navigate("/dashboard");
       }
     } catch (error) {

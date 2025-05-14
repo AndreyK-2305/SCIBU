@@ -35,11 +35,20 @@ export default function ProtectedRoute({
   >(undefined);
   const [isAdmin, setIsAdmin] = useState<boolean | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
+  const [profileChecked, setProfileChecked] = useState(false);
 
-  // Debug flag para mostrar la redirección que se va a hacer
-  const [redirect, setRedirect] = useState<string | null>(null);
+  // Si estamos en la página de registro o completar perfil, no redirigir
+  const isAuthPage = location.pathname.startsWith("/auth/");
+  const isCompleteProfilePage = location.pathname === "/auth/complete-profile";
+  // Si estamos en la página de admin-setup, permitir acceso
+  const isAdminSetupPage = location.pathname === "/admin-setup";
 
   useEffect(() => {
+    // No re-ejecutar este efecto si ya hemos verificado el perfil
+    if (profileChecked && !isLoading) {
+      return;
+    }
+
     async function checkProfile() {
       if (BYPASS_AUTH) {
         // Modo bypass: permitir acceso sin autenticación
@@ -47,6 +56,7 @@ export default function ProtectedRoute({
         setIsProfileComplete(true);
         setIsAdmin(MOCK_ADMIN);
         setIsLoading(false);
+        setProfileChecked(true);
         return;
       }
 
@@ -61,6 +71,7 @@ export default function ProtectedRoute({
             setIsAdmin(true);
             setIsProfileComplete(true);
             setIsLoading(false);
+            setProfileChecked(true);
 
             // Intentar crear el perfil de administrador si no existe
             try {
@@ -112,13 +123,15 @@ export default function ProtectedRoute({
             const adminStatus = userData.role === "admin";
             setIsAdmin(adminStatus);
 
+            // Verificar explícitamente el isProfileComplete
+            const profileComplete = userData.isProfileComplete === true;
+            console.log("Profile complete status from DB:", profileComplete);
+
             // Si es admin, consideramos su perfil completo independientemente del estado real
-            setIsProfileComplete(
-              adminStatus ? true : userData.isProfileComplete || false,
-            );
+            setIsProfileComplete(adminStatus ? true : profileComplete);
 
             console.log(
-              `User ${user.uid} is admin: ${adminStatus}, profile complete: ${adminStatus ? true : userData.isProfileComplete || false}`,
+              `User ${user.uid} is admin: ${adminStatus}, profile complete: ${adminStatus ? true : profileComplete}`,
             );
           } else {
             console.log(
@@ -144,7 +157,7 @@ export default function ProtectedRoute({
                 role: "beneficiario", // Rol predeterminado para usuarios regulares
               });
               console.log("Perfil básico de usuario creado");
-              setIsProfileComplete(true);
+              setIsProfileComplete(false); // El perfil necesita ser completado
               setIsAdmin(false);
             } catch (error) {
               console.error("Error al crear perfil básico de usuario:", error);
@@ -158,20 +171,16 @@ export default function ProtectedRoute({
           setIsAdmin(false);
         } finally {
           setIsLoading(false);
+          setProfileChecked(true);
         }
       } else {
         setIsLoading(false);
+        setProfileChecked(true);
       }
     }
 
     checkProfile();
-  }, [user]);
-
-  // Si estamos en la página de registro o completar perfil, no redirigir
-  const isAuthPage = location.pathname.startsWith("/auth/");
-  const isCompleteProfilePage = location.pathname === "/auth/complete-profile";
-  // Si estamos en la página de admin-setup, permitir acceso
-  const isAdminSetupPage = location.pathname === "/admin-setup";
+  }, [user, profileChecked, isLoading]);
 
   console.log(
     "Current path:",
@@ -197,13 +206,21 @@ export default function ProtectedRoute({
 
   // Permitir siempre acceso a las páginas de auth (excepto complete-profile para admins)
   if (isAuthPage) {
+    // Si el usuario está autenticado y tiene perfil completo, redirigir al dashboard
+    if (user && isProfileComplete && !isCompleteProfilePage) {
+      console.log(
+        "User already authenticated, redirecting to dashboard from auth page",
+      );
+      return <Navigate to="/dashboard" />;
+    }
+
     if (isCompleteProfilePage && isAdmin) {
       console.log(
         "Admin user on complete-profile page, redirecting to dashboard",
       );
-      setRedirect("/dashboard");
       return <Navigate to="/dashboard" />;
     }
+    console.log("Staying on auth page:", location.pathname);
     return children || elemOnDeny;
   }
 
@@ -221,8 +238,7 @@ export default function ProtectedRoute({
   // Si no hay usuario, redirigir a login
   if (user === null) {
     console.log("No user found, redirecting to login");
-    setRedirect("/auth/login");
-    return elemOnDeny || <Navigate to="/auth/login" />;
+    return <Navigate to="/auth/login" />;
   }
 
   // Los usuarios administradores siempre tienen acceso al dashboard
@@ -239,9 +255,8 @@ export default function ProtectedRoute({
   }
 
   // Si el perfil no está completo, redirigir a completar perfil
-  if (!isProfileComplete) {
+  if (isProfileComplete === false) {
     console.log("Profile incomplete, redirecting to complete profile");
-    setRedirect("/auth/complete-profile");
     return <Navigate to="/auth/complete-profile" />;
   }
 
@@ -250,11 +265,13 @@ export default function ProtectedRoute({
     console.log(
       "Admin role required but user is not admin, redirecting to dashboard",
     );
-    setRedirect("/dashboard");
     return <Navigate to="/dashboard" />;
   }
 
-  console.log("All checks passed, showing protected content");
+  console.log(
+    "All checks passed, showing protected content at",
+    location.pathname,
+  );
   // Si todo está bien, mostrar el contenido
   return elemOnAllow || children;
 }

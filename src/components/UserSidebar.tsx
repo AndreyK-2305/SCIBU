@@ -22,37 +22,35 @@ interface NavItem {
 // Modified navigation items for regular users
 const navItems: NavItem[] = [
   {
+    label: "Inicio",
+    icon: "material-symbols:home-outline",
+    url: "/dashboard",
+  },
+  {
     label: "Datos Personales",
     icon: "material-symbols:person-outline",
-    url: "datos-personales",
+    url: "/dashboard/datos-personales",
   },
   {
     label: "Citas",
     icon: "material-symbols:calendar-month",
-    url: "citas",
+    url: "/dashboard/citas",
   },
   {
     label: "Consultar Usuario",
     icon: "material-symbols:search",
-    url: "consultar-usuario",
+    url: "/dashboard/consultar-usuario",
   },
 ];
 
 export default function UserSidebar() {
-  const { auth } = useAuth();
+  const { logout } = useAuth();
   const { pathname } = useLocation();
 
-  const currentItemPath = pathname.split("/")[2];
-  const currentNavItem =
-    currentItemPath?.length > 0
-      ? navItems.find((item) => item.url === currentItemPath)
-      : undefined;
+  // Compare the current path with navigation items
+  const currentNavItem = navItems.find((item) => pathname === item.url);
 
   const [collapsed, setCollapsed] = useState(true);
-
-  async function handleLogout() {
-    await auth.signOut();
-  }
 
   return (
     <>
@@ -92,7 +90,7 @@ export default function UserSidebar() {
               <p className="text-center font-bold">Usuario</p>
               <p className="text-center text-sm">USUARIO</p>
               <Separator className="my-4" />
-              <Button variant="outline" onClick={handleLogout}>
+              <Button variant="outline" onClick={logout}>
                 Cerrar Sesión
               </Button>
             </PopoverContent>
@@ -105,7 +103,7 @@ export default function UserSidebar() {
                 variant="ghost"
                 className={cn(
                   "w-full justify-start has-[>svg]:p-0",
-                  currentNavItem === item && "bg-neutral-100 text-neutral-900",
+                  pathname === item.url && "bg-neutral-100 text-neutral-900",
                   collapsed && "w-9",
                 )}
                 onClick={() => {
