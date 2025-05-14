@@ -9,7 +9,11 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
 import { handleFirebaseError } from "@/lib/error";
-import { createInitialUserData } from "@/services/user";
+import {
+  createInitialUserData,
+  createUserData,
+  UserData,
+} from "@/services/user";
 
 import useAuth from "./useAuth";
 
@@ -34,7 +38,14 @@ export function useRegister() {
     }, 1000);
   };
 
-  const registerWithEmail = async (email: string, password: string) => {
+  const registerWithEmail = async (
+    email: string,
+    password: string,
+    profileData?: Omit<
+      UserData,
+      "createdAt" | "updatedAt" | "isProfileComplete"
+    >,
+  ) => {
     try {
       console.log("Starting email registration for:", email);
       // Crear el usuario
@@ -45,11 +56,22 @@ export function useRegister() {
       );
       console.log("User created in Firebase Auth:", userCredential.user.uid);
 
-      // Crear los datos iniciales del usuario
-      await createInitialUserData(
-        userCredential.user.uid,
-        userCredential.user.email || "",
-      );
+      // Crear los datos del usuario
+      if (profileData) {
+        // Si hay datos de perfil, usar createUserData (perfil completo)
+        console.log("Creating complete user profile with data:", profileData);
+        await createUserData(userCredential.user.uid, {
+          ...profileData,
+          email: userCredential.user.email || email,
+        });
+      } else {
+        // Si no hay datos de perfil, crear datos iniciales
+        console.log("Creating initial user data");
+        await createInitialUserData(
+          userCredential.user.uid,
+          userCredential.user.email || "",
+        );
+      }
       console.log("User data created in Firestore");
 
       // Manejar el registro exitoso

@@ -1,12 +1,19 @@
+import { Timestamp } from "firebase/firestore";
 import { ReactNode, useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router";
 
 import useAuth from "@/hooks/useAuth";
-import { getUserData } from "@/services/user";
+import {
+  getUserData,
+  updateUserData,
+  createUserData,
+  UserData,
+} from "@/services/user";
+import { ADMIN_CREDENTIALS } from "@/utils/adminInfo";
 
 // Configuración temporal para bypass de autenticación (SOLO PARA DESARROLLO)
-const BYPASS_AUTH = true; // Cambia a false para requerir autenticación
-const MOCK_ADMIN = true; // Simular que el usuario es administrador
+const BYPASS_AUTH = false; // Changed to false to use actual authentication
+const MOCK_ADMIN = false; // Simular que el usuario es administrador
 
 interface ProtectedRouteProps {
   children?: ReactNode;
@@ -46,6 +53,57 @@ export default function ProtectedRoute({
       if (user?.uid) {
         try {
           console.log("Checking profile completion for user:", user.uid);
+
+          // Verificar si es el usuario admin por email
+          const isAdminEmail = user.email === ADMIN_CREDENTIALS.email;
+          if (isAdminEmail) {
+            console.log("El usuario es admin por correo electrónico");
+            setIsAdmin(true);
+            setIsProfileComplete(true);
+            setIsLoading(false);
+
+            // Intentar crear el perfil de administrador si no existe
+            try {
+              const userData = await getUserData(user.uid);
+              if (!userData) {
+                console.log("Creando perfil de administrador automáticamente");
+                // Crear perfil admin automáticamente
+                await createUserData(user.uid, {
+                  email: user.email || ADMIN_CREDENTIALS.email,
+                  fullName: "Administrador Sistema",
+                  documentType: "CC",
+                  documentNumber: "1234567890",
+                  birthDate: "1990-01-01",
+                  phone: "3001234567",
+                  gender: "Masculino",
+                  code: "ADMIN001",
+                  status: "Administrativo",
+                  program: "Administración del Sistema",
+                  populationGroups: [],
+                  socialPrograms: [],
+                  role: "admin",
+                });
+                console.log("Perfil de administrador creado con éxito");
+              } else if (!userData.isProfileComplete) {
+                // Forzar completado de perfil del admin
+                await updateUserData(user.uid, {
+                  ...userData,
+                  isProfileComplete: true,
+                  role: "admin",
+                });
+                console.log("Perfil de administrador actualizado a completado");
+              }
+            } catch (error) {
+              console.error(
+                "Error al crear/actualizar perfil de admin:",
+                error,
+              );
+              // Aún así, permitimos el acceso
+            }
+            return;
+          }
+
+          // Continuar con la lógica normal para usuarios no admin
           const userData = await getUserData(user.uid);
           console.log("User data from Firestore:", userData);
 
@@ -63,9 +121,36 @@ export default function ProtectedRoute({
               `User ${user.uid} is admin: ${adminStatus}, profile complete: ${adminStatus ? true : userData.isProfileComplete || false}`,
             );
           } else {
-            console.error("No user data found in Firestore");
-            setIsProfileComplete(false);
-            setIsAdmin(false);
+            console.log(
+              "No user data found, creating basic profile for regular user",
+            );
+
+            // Crear un perfil básico para usuario regular si no existe
+            try {
+              // Crear perfil de usuario básico automáticamente
+              await createUserData(user.uid, {
+                email: user.email || "",
+                fullName: user.displayName || "",
+                documentType: "",
+                documentNumber: "",
+                birthDate: "",
+                phone: "",
+                gender: "",
+                code: "",
+                status: "",
+                program: "",
+                populationGroups: [],
+                socialPrograms: [],
+                role: "beneficiario", // Rol predeterminado para usuarios regulares
+              });
+              console.log("Perfil básico de usuario creado");
+              setIsProfileComplete(true);
+              setIsAdmin(false);
+            } catch (error) {
+              console.error("Error al crear perfil básico de usuario:", error);
+              setIsProfileComplete(false);
+              setIsAdmin(false);
+            }
           }
         } catch (error) {
           console.error("Error checking profile:", error);

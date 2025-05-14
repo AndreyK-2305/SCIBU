@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { X } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, SubmitHandler } from "react-hook-form";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import useAuth from "@/hooks/useAuth";
 import { useRegister } from "@/hooks/useRegister";
-import { updateUserData } from "@/services/user";
+import { updateUserData, UserData } from "@/services/user";
 
 interface UserDataFormProps {
   email?: string;
@@ -44,6 +44,10 @@ const formSchema = z.object({
   code: z.string().min(1, "El código es requerido"),
   status: z.string().min(1, "El estamento es requerido"),
   program: z.string().min(1, "El programa académico es requerido"),
+  populationGroups: z.array(z.string()),
+  socialPrograms: z.array(z.string()),
+  email: z.string().optional(),
+  role: z.string().optional(),
 });
 
 const populationGroupOptions = [
@@ -93,20 +97,35 @@ export default function UserDataForm({
       code: "",
       status: "Estudiante",
       program: "",
+      populationGroups: [],
+      socialPrograms: [],
+      email: email || "",
+      role: "beneficiario",
     },
   });
 
-  async function onSubmit(data: FormValues) {
+  const onSubmit: SubmitHandler<FormValues> = async (data) => {
     try {
       setIsSubmitting(true);
+      console.log("Submitting form data:", data);
+
+      const profileData = {
+        ...data,
+        email: email || data.email || user?.email || "",
+        role: data.role || "beneficiario",
+      };
+
       if (email && password) {
         // Modo registro: crear cuenta y luego actualizar datos
-        await registerWithEmail(email, password);
+        await registerWithEmail(email, password, profileData);
         toast.success("Cuenta creada exitosamente");
         navigate("/auth/login");
       } else if (user?.uid) {
         // Modo completar perfil: solo actualizar datos
-        await updateUserData(user.uid, data);
+        await updateUserData(user.uid, {
+          ...profileData,
+          isProfileComplete: true,
+        });
         toast.success("Perfil actualizado correctamente");
         // Esperar un momento para mostrar "Finalizado"
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -117,7 +136,7 @@ export default function UserDataForm({
       toast.error("Error al procesar la solicitud");
       setIsSubmitting(false);
     }
-  }
+  };
 
   const handleCancel = () => {
     if (onBack) {
@@ -346,38 +365,104 @@ export default function UserDataForm({
                 <FormLabel>
                   ¿Pertenece a alguno de los siguientes grupos poblacionales?
                 </FormLabel>
-                <div className="mt-2 grid gap-2">
-                  {populationGroupOptions.map((option) => (
-                    <div key={option.id} className="flex items-center">
-                      <Checkbox id={`population-${option.id}`} />
-                      <label
-                        htmlFor={`population-${option.id}`}
-                        className="ml-2 text-sm font-normal"
-                      >
-                        {option.label}
-                      </label>
-                    </div>
-                  ))}
-                </div>
+                <FormField
+                  control={form.control}
+                  name="populationGroups"
+                  render={() => (
+                    <FormItem>
+                      <div className="mt-2 grid gap-2">
+                        {populationGroupOptions.map((option) => (
+                          <FormField
+                            key={option.id}
+                            control={form.control}
+                            name="populationGroups"
+                            render={({ field }) => {
+                              return (
+                                <FormItem
+                                  key={option.id}
+                                  className="flex items-center space-x-2"
+                                >
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value?.includes(option.id)}
+                                      onCheckedChange={(checked) => {
+                                        return checked
+                                          ? field.onChange([
+                                              ...field.value,
+                                              option.id,
+                                            ])
+                                          : field.onChange(
+                                              field.value?.filter(
+                                                (value) => value !== option.id,
+                                              ),
+                                            );
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="font-normal">
+                                    {option.label}
+                                  </FormLabel>
+                                </FormItem>
+                              );
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </FormItem>
+                  )}
+                />
               </div>
 
               <div>
                 <FormLabel>
                   ¿Pertenece a alguno de estos programas sociales?
                 </FormLabel>
-                <div className="mt-2 grid gap-2">
-                  {socialProgramOptions.map((option) => (
-                    <div key={option.id} className="flex items-center">
-                      <Checkbox id={`social-${option.id}`} />
-                      <label
-                        htmlFor={`social-${option.id}`}
-                        className="ml-2 text-sm font-normal"
-                      >
-                        {option.label}
-                      </label>
-                    </div>
-                  ))}
-                </div>
+                <FormField
+                  control={form.control}
+                  name="socialPrograms"
+                  render={() => (
+                    <FormItem>
+                      <div className="mt-2 grid gap-2">
+                        {socialProgramOptions.map((option) => (
+                          <FormField
+                            key={option.id}
+                            control={form.control}
+                            name="socialPrograms"
+                            render={({ field }) => {
+                              return (
+                                <FormItem
+                                  key={option.id}
+                                  className="flex items-center space-x-2"
+                                >
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value?.includes(option.id)}
+                                      onCheckedChange={(checked) => {
+                                        return checked
+                                          ? field.onChange([
+                                              ...field.value,
+                                              option.id,
+                                            ])
+                                          : field.onChange(
+                                              field.value?.filter(
+                                                (value) => value !== option.id,
+                                              ),
+                                            );
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="font-normal">
+                                    {option.label}
+                                  </FormLabel>
+                                </FormItem>
+                              );
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </FormItem>
+                  )}
+                />
               </div>
             </div>
           </div>

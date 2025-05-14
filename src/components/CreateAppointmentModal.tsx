@@ -24,10 +24,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import useAuth from "@/hooks/useAuth";
 import { createAppointment } from "@/services/appointment";
 import { getSchedulesByDate } from "@/services/schedule";
 import { getAllServices } from "@/services/service";
 import { getAllSpecialists } from "@/services/specialist";
+import { getUserData } from "@/services/user";
 import { Appointment } from "@/types/appointment";
 import { Schedule } from "@/types/schedule";
 import { Service } from "@/types/service";
@@ -46,6 +48,9 @@ export default function CreateAppointmentModal({
   onSuccess,
   isAdmin = false,
 }: CreateAppointmentModalProps) {
+  // Auth hook for getting current user info
+  const { user } = useAuth();
+
   // Form fields
   const [selectedService, setSelectedService] = useState<string>("");
   const [disability, setDisability] = useState<boolean>(false);
@@ -54,6 +59,7 @@ export default function CreateAppointmentModal({
   const [selectedTime, setSelectedTime] = useState<string>("");
   const [studentId, setStudentId] = useState<string>("");
   const [requesterName, setRequesterName] = useState<string>("");
+  const [userInfo, setUserInfo] = useState<any>(null);
 
   // Data
   const [services, setServices] = useState<Service[]>([]);
@@ -69,10 +75,32 @@ export default function CreateAppointmentModal({
   const [step, setStep] = useState(1);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
+  // Current date + 1 day for calendar min date
+  const tomorrow = addDays(new Date(), 1);
+
   // Load services and specialists on initial render
   useEffect(() => {
     loadServicesAndSpecialists();
-  }, []);
+
+    // Load user info if not admin
+    if (!isAdmin && user?.uid) {
+      loadUserInfo(user.uid);
+    }
+  }, [isAdmin, user]);
+
+  // Function to load current user information
+  const loadUserInfo = async (userId: string) => {
+    try {
+      const userData = await getUserData(userId);
+      if (userData) {
+        setUserInfo(userData);
+        setRequesterName(userData.fullName || "");
+        setStudentId(userData.code || "");
+      }
+    } catch (error) {
+      console.error("Error loading user info:", error);
+    }
+  };
 
   // Filter specialists when a service is selected
   useEffect(() => {
@@ -93,62 +121,63 @@ export default function CreateAppointmentModal({
     }
   }, [selectedService, allSpecialists]);
 
-  // Load available time slots when date or specialist changes
+  // Load available time slots when date and specialist are selected
   useEffect(() => {
     if (selectedDate && selectedSpecialist) {
       loadAvailableTimeSlots(selectedDate);
+    } else {
+      setAvailableTimeSlots([]);
+      setSelectedTime("");
     }
   }, [selectedDate, selectedSpecialist]);
 
-  // Load services and specialists from local storage
+  // Load initial data (services and specialists)
   const loadServicesAndSpecialists = async () => {
     try {
       setLoading(true);
+      const [servicesData, specialistsData] = await Promise.all([
+        getAllServices(),
+        getAllSpecialists(),
+      ]);
 
-      // Load services
-      const servicesData = await getAllServices();
       setServices(servicesData);
-
-      // Load all specialists
-      const specialistsData = await getAllSpecialists();
       setAllSpecialists(specialistsData);
-
-      // Set first service as default if available
-      if (servicesData.length > 0 && !selectedService) {
-        setSelectedService(servicesData[0].id);
-      }
     } catch (error) {
-      console.error("Error loading data:", error);
-      toast.error("Error al cargar datos");
+      console.error("Error loading initial data:", error);
+      toast.error("Error al cargar los datos iniciales");
     } finally {
       setLoading(false);
     }
   };
 
-  // Helper function to generate time slots in 30-minute increments
-  const generateTimeSlots = (startTime: string, endTime: string): string[] => {
-    const timeSlots: string[] = [];
+  // Generate time slots from start and end time
+  const generateTimeSlots = (startTime: string, endTime: string) => {
+    const slots = [];
     const [startHour, startMinute] = startTime.split(":").map(Number);
     const [endHour, endMinute] = endTime.split(":").map(Number);
 
-    // Convert start and end times to minutes for easier comparison
-    const startTimeInMinutes = startHour * 60 + startMinute;
-    const endTimeInMinutes = endHour * 60 + endMinute;
+    let currentHour = startHour;
+    let currentMinute = startMinute;
 
-    // Generate 30-minute slots
-    for (
-      let timeInMinutes = startTimeInMinutes;
-      timeInMinutes < endTimeInMinutes;
-      timeInMinutes += 30
+    while (
+      currentHour < endHour ||
+      (currentHour === endHour && currentMinute <= endMinute)
     ) {
-      const hour = Math.floor(timeInMinutes / 60);
-      const minute = timeInMinutes % 60;
-      timeSlots.push(
-        `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`,
-      );
+      const formattedHour = currentHour.toString().padStart(2, "0");
+      const formattedMinute = currentMinute.toString().padStart(2, "0");
+      const timeSlot = `${formattedHour}:${formattedMinute}`;
+
+      slots.push(timeSlot);
+
+      // Increment by 30 minutes
+      currentMinute += 30;
+      if (currentMinute >= 60) {
+        currentHour += 1;
+        currentMinute = 0;
+      }
     }
 
-    return timeSlots;
+    return slots;
   };
 
   // Load available time slots for the selected date and specialist
@@ -195,43 +224,56 @@ export default function CreateAppointmentModal({
     }
   };
 
-  // Move to next step
-  const goToNextStep = () => {
-    // Validate current step
+  // Validate form based on current step
+  const validateForm = () => {
     const errors: Record<string, string> = {};
 
     if (step === 1) {
-      if (!selectedService) errors.service = "Seleccione un servicio";
-      if (!reason) errors.reason = "Ingrese el motivo de la consulta";
+      if (!selectedService) {
+        errors.service = "Debe seleccionar un servicio";
+      }
 
-      // For admin, check student ID and requester name
       if (isAdmin) {
-        if (!studentId) errors.studentId = "Ingrese el código de estudiante";
-        if (!requesterName)
-          errors.requesterName = "Ingrese el nombre del solicitante";
+        if (!studentId) {
+          errors.studentId = "Debe ingresar el código del estudiante";
+        }
+
+        if (!requesterName) {
+          errors.requesterName = "Debe ingresar el nombre del solicitante";
+        }
+      }
+
+      if (!reason) {
+        errors.reason = "Debe ingresar el motivo de la consulta";
       }
     } else if (step === 2) {
-      if (!selectedDate) errors.date = "Seleccione una fecha";
-      if (!selectedTime) errors.time = "Seleccione un horario";
-      if (!selectedSpecialist) errors.specialist = "Seleccione un especialista";
+      if (!selectedSpecialist) {
+        errors.specialist = "Debe seleccionar un especialista";
+      }
+
+      if (!selectedDate) {
+        errors.date = "Debe seleccionar una fecha";
+      }
+
+      if (!selectedTime) {
+        errors.time = "Debe seleccionar una hora";
+      }
     }
 
     setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
-    // If no errors, proceed to next step
-    if (Object.keys(errors).length === 0) {
-      if (step === 2) {
-        // Submit the form if on step 2
-        handleSubmit();
-      } else {
-        setStep(step + 1);
-      }
+  // Handle next step
+  const handleNextStep = () => {
+    if (validateForm()) {
+      setStep(2);
     }
   };
 
-  // Go back to previous step
-  const goToPreviousStep = () => {
-    setStep(step - 1);
+  // Handle back to step 1
+  const handleBackStep = () => {
+    setStep(1);
   };
 
   // Handle form submission
@@ -266,8 +308,12 @@ export default function CreateAppointmentModal({
       > = {
         date: selectedDate,
         time: selectedTime,
-        requesterName: isAdmin ? requesterName : "Usuario actual", // Replace with actual user info
-        requesterType: isAdmin ? "Estudiante" : "Empleado", // Assume students for admin-created appointments
+        requesterName: isAdmin
+          ? requesterName
+          : userInfo?.fullName || "Usuario actual",
+        requesterType: isAdmin
+          ? "Estudiante"
+          : userInfo?.status || "Estudiante",
         serviceType: service.title,
         specialistId: selectedSpecialist,
         specialistName: specialist.name,
@@ -310,33 +356,21 @@ export default function CreateAppointmentModal({
     setFormErrors({});
   };
 
-  // Get today and tomorrow for date calculations
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = addDays(today, 1);
-
   return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) {
-          onClose();
-          resetForm();
-        }
-      }}
-    >
-      <DialogContent className="sm:max-w-[550px]">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg md:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Programar Cita</DialogTitle>
+          <DialogTitle>Agendar cita</DialogTitle>
         </DialogHeader>
 
-        {step === 1 && (
+        {step === 1 ? (
           <>
-            {/* Step 1: Basic Information */}
-            <div className="space-y-6">
-              {/* Service */}
+            <div className="space-y-6 py-4">
+              {/* Service selection */}
               <div className="space-y-2">
-                <Label htmlFor="service">Servicio</Label>
+                <Label htmlFor="service" className="font-medium">
+                  Servicio <span className="text-red-500">*</span>
+                </Label>
                 <Select
                   value={selectedService}
                   onValueChange={setSelectedService}
@@ -356,15 +390,20 @@ export default function CreateAppointmentModal({
                   </SelectContent>
                 </Select>
                 {formErrors.service && (
-                  <p className="text-sm text-red-500">{formErrors.service}</p>
+                  <p className="mt-2 text-sm text-red-500">
+                    {formErrors.service}
+                  </p>
                 )}
               </div>
 
-              {/* Admin-only fields */}
+              {/* Student ID and requester name - Only for admin mode */}
               {isAdmin && (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="studentId">Código de estudiante</Label>
+                    <Label htmlFor="studentId" className="font-medium">
+                      Código de estudiante{" "}
+                      <span className="text-red-500">*</span>
+                    </Label>
                     <Input
                       id="studentId"
                       value={studentId}
@@ -372,15 +411,16 @@ export default function CreateAppointmentModal({
                       className={formErrors.studentId ? "border-red-500" : ""}
                     />
                     {formErrors.studentId && (
-                      <p className="text-sm text-red-500">
+                      <p className="mt-2 text-sm text-red-500">
                         {formErrors.studentId}
                       </p>
                     )}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="requesterName">
-                      Nombre del solicitante
+                    <Label htmlFor="requesterName" className="font-medium">
+                      Nombre del solicitante{" "}
+                      <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       id="requesterName"
@@ -391,7 +431,7 @@ export default function CreateAppointmentModal({
                       }
                     />
                     {formErrors.requesterName && (
-                      <p className="text-sm text-red-500">
+                      <p className="mt-2 text-sm text-red-500">
                         {formErrors.requesterName}
                       </p>
                     )}
@@ -399,47 +439,69 @@ export default function CreateAppointmentModal({
                 </>
               )}
 
-              {/* Disability */}
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="disability"
-                  checked={disability}
-                  onCheckedChange={(checked) => setDisability(checked === true)}
-                />
-                <Label htmlFor="disability">Incapacidad</Label>
+              {/* Disability option */}
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="disability"
+                    checked={disability}
+                    onCheckedChange={(checked) =>
+                      setDisability(checked as boolean)
+                    }
+                  />
+                  <Label htmlFor="disability">Persona con discapacidad</Label>
+                </div>
               </div>
 
-              {/* Reason */}
+              {/* Consultation reason */}
               <div className="space-y-2">
-                <Label htmlFor="reason">Motivo de la consulta</Label>
+                <Label htmlFor="reason" className="font-medium">
+                  Motivo de la consulta <span className="text-red-500">*</span>
+                </Label>
                 <Textarea
                   id="reason"
-                  placeholder="Escriba aquí..."
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  className={`min-h-32 ${formErrors.reason ? "border-red-500" : ""}`}
+                  className={`min-h-32 resize-none ${
+                    formErrors.reason ? "border-red-500" : ""
+                  }`}
+                  placeholder="Describa el motivo de la consulta"
                 />
                 {formErrors.reason && (
-                  <p className="text-sm text-red-500">{formErrors.reason}</p>
+                  <p className="mt-2 text-sm text-red-500">
+                    {formErrors.reason}
+                  </p>
                 )}
               </div>
             </div>
-          </>
-        )}
 
-        {step === 2 && (
+            <div className="flex justify-end space-x-2">
+              <DialogClose asChild>
+                <Button variant="outline">Cancelar</Button>
+              </DialogClose>
+              <Button
+                type="button"
+                onClick={handleNextStep}
+                disabled={loading}
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                Siguiente
+              </Button>
+            </div>
+          </>
+        ) : (
           <>
-            {/* Step 2: Date and Time Selection */}
-            <div className="space-y-6">
-              {/* Specialist selection */}
-              <div className="space-y-2">
-                <Label htmlFor="specialist">Especialista</Label>
+            <div className="space-y-6 py-4">
+              <div className="space-y-4">
+                <Label className="font-medium">
+                  Seleccione un especialista{" "}
+                  <span className="text-red-500">*</span>
+                </Label>
                 <Select
                   value={selectedSpecialist}
                   onValueChange={setSelectedSpecialist}
                 >
                   <SelectTrigger
-                    id="specialist"
                     className={formErrors.specialist ? "border-red-500" : ""}
                   >
                     <SelectValue placeholder="Seleccione un especialista" />
@@ -453,7 +515,7 @@ export default function CreateAppointmentModal({
                   </SelectContent>
                 </Select>
                 {formErrors.specialist && (
-                  <p className="text-sm text-red-500">
+                  <p className="mt-2 text-sm text-red-500">
                     {formErrors.specialist}
                   </p>
                 )}
@@ -527,32 +589,32 @@ export default function CreateAppointmentModal({
                 </div>
               </div>
             </div>
+
+            <div className="flex justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleBackStep}
+                disabled={loading}
+              >
+                Regresar
+              </Button>
+              <div className="space-x-2">
+                <DialogClose asChild>
+                  <Button variant="outline">Cancelar</Button>
+                </DialogClose>
+                <Button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="bg-indigo-600 hover:bg-indigo-700"
+                >
+                  {loading ? "Agendando..." : "Agendar cita"}
+                </Button>
+              </div>
+            </div>
           </>
         )}
-
-        <div className="mt-6 flex justify-between">
-          {step > 1 ? (
-            <Button
-              variant="outline"
-              onClick={goToPreviousStep}
-              disabled={loading}
-            >
-              Atrás
-            </Button>
-          ) : (
-            <Button variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-          )}
-
-          <Button
-            onClick={goToNextStep}
-            disabled={loading}
-            className="bg-indigo-600 hover:bg-indigo-700"
-          >
-            {step === 2 ? "Enviar" : "Siguiente"}
-          </Button>
-        </div>
       </DialogContent>
     </Dialog>
   );

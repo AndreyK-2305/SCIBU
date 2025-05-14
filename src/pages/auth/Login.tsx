@@ -26,6 +26,7 @@ import { InputPassword } from "@/components/ui/input-password";
 import useAuth from "@/hooks/useAuth";
 import { handleFirebaseError } from "@/lib/error";
 import { db } from "@/lib/firebase";
+import { ADMIN_CREDENTIALS } from "@/utils/adminInfo";
 
 export default function Login() {
   const { auth } = useAuth();
@@ -233,14 +234,11 @@ export default function Login() {
                       console.log(
                         "Iniciando sesión con credenciales de admin predefinidas",
                       );
-                      // Credenciales de administrador predefinidas
-                      const adminEmail = "admin@example.com";
-                      const adminPassword = "admin123456";
 
                       const userCredential = await signInWithEmailAndPassword(
                         auth,
-                        adminEmail,
-                        adminPassword,
+                        ADMIN_CREDENTIALS.email,
+                        ADMIN_CREDENTIALS.password,
                       );
                       console.log(
                         "Inicio de sesión como admin exitoso:",
@@ -259,6 +257,9 @@ export default function Login() {
                         toast.error(
                           "Usuario admin no existe. Visita la página de admin-setup para crearlo.",
                         );
+                        setTimeout(() => {
+                          window.location.href = "#/admin-setup";
+                        }, 2000);
                       } else {
                         toast.error("Error al iniciar sesión como admin");
                       }
