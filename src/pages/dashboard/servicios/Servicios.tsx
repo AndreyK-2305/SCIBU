@@ -261,7 +261,7 @@ export default function Servicios() {
           <div className="relative">
             <Input
               type="text"
-              placeholder="Filtros"
+              placeholder="Buscar servicio"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="h-10 min-w-[200px]"

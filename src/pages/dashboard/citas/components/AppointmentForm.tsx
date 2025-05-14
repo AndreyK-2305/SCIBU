@@ -1,7 +1,13 @@
 import { Icon } from "@iconify/react";
-import { format } from "date-fns";
+import {
+  format,
+  isWithinInterval,
+  parse,
+  setHours,
+  setMinutes,
+} from "date-fns";
 import { es } from "date-fns/locale";
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -12,6 +18,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -38,9 +45,16 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import useAuth from "@/hooks/useAuth";
 import { createAppointment } from "@/services/appointment";
+import {
+  getAllSchedules,
+  getSchedulesBySpecialistId,
+} from "@/services/schedule";
+import { getAllSpecialists } from "@/services/specialist";
 import { getUserData } from "@/services/user";
 import { Appointment, AppointmentFormData } from "@/types/appointment";
+import { Schedule } from "@/types/schedule";
 import { Service } from "@/types/service";
+import { Specialist } from "@/types/specialist";
 
 interface AppointmentFormProps {
   isOpen: boolean;
@@ -57,30 +71,152 @@ export default function AppointmentForm({
 }: AppointmentFormProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [timeOptions] = useState([
-    "8:00 AM",
-    "8:30 AM",
-    "9:00 AM",
-    "9:30 AM",
-    "10:00 AM",
-    "10:30 AM",
-    "11:00 AM",
-    "11:30 AM",
-    "1:00 PM",
-    "1:30 PM",
-    "2:00 PM",
-    "2:30 PM",
-    "3:00 PM",
-    "3:30 PM",
-    "4:00 PM",
-    "4:30 PM",
-  ]);
+  const [loadingData, setLoadingData] = useState(true);
+  const [specialists, setSpecialists] = useState<Specialist[]>([]);
+  const [availableSchedules, setAvailableSchedules] = useState<Schedule[]>([]);
+  const [timeOptions, setTimeOptions] = useState<string[]>([]);
+  const [selectedService, setSelectedService] = useState<string>("");
+  const [selectedSpecialist, setSelectedSpecialist] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [serviceSpecialistsMap, setServiceSpecialistsMap] = useState<
+    Record<string, Specialist[]>
+  >({});
+  const initialized = useRef(false);
+
+  // Load specialists and their schedules
+  useEffect(() => {
+    const loadData = async () => {
+      if (isOpen && !initialized.current) {
+        console.log("Loading data for appointment form, isOpen:", isOpen);
+        setLoadingData(true);
+        try {
+          console.log("Services passed to AppointmentForm:", services);
+
+          // Get all specialists
+          const loadedSpecialists = await getAllSpecialists();
+          const activeSpecialists = loadedSpecialists.filter(
+            (specialist) => specialist.isActive,
+          );
+          setSpecialists(activeSpecialists);
+
+          console.log("Active specialists:", activeSpecialists);
+
+          // Create a mapping of services to specialists
+          const specialistsMap: Record<string, Specialist[]> = {};
+
+          services.forEach((service) => {
+            console.log(
+              `Service "${service.title}" has specialists:`,
+              service.specialists,
+            );
+            if (service.specialists && service.specialists.length > 0) {
+              const serviceSpecialists = activeSpecialists.filter(
+                (specialist) => service.specialists.includes(specialist.id),
+              );
+              specialistsMap[service.title] = serviceSpecialists;
+              console.log(
+                `Mapped ${serviceSpecialists.length} specialists to service "${service.title}"`,
+                serviceSpecialists,
+              );
+            } else {
+              specialistsMap[service.title] = [];
+            }
+          });
+
+          console.log("Final service-specialists mapping:", specialistsMap);
+          setServiceSpecialistsMap(specialistsMap);
+          initialized.current = true;
+        } catch (error) {
+          console.error("Error loading specialists:", error);
+          toast.error("Error al cargar los especialistas");
+        } finally {
+          setLoadingData(false);
+        }
+      }
+    };
+
+    loadData();
+  }, [isOpen, services]);
+
+  // Reset initialized flag when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      initialized.current = false;
+    }
+  }, [isOpen]);
+
+  // Load specialist schedules when a specialist is selected
+  useEffect(() => {
+    const loadSpecialistSchedules = async () => {
+      if (selectedSpecialist) {
+        try {
+          setLoadingData(true);
+          // Get schedules for the selected specialist
+          const schedules =
+            await getSchedulesBySpecialistId(selectedSpecialist);
+          setAvailableSchedules(schedules);
+        } catch (error) {
+          console.error("Error loading specialist schedules:", error);
+          toast.error("Error al cargar los horarios del especialista");
+        } finally {
+          setLoadingData(false);
+        }
+      } else {
+        setAvailableSchedules([]);
+      }
+    };
+
+    loadSpecialistSchedules();
+  }, [selectedSpecialist]);
+
+  // Generate time options based on selected date and specialist schedules
+  useEffect(() => {
+    if (selectedDate && availableSchedules.length > 0) {
+      // Filter schedules for the selected date
+      const dateSchedules = availableSchedules.filter((schedule) => {
+        const scheduleDate = new Date(schedule.date);
+        return (
+          scheduleDate.getDate() === selectedDate.getDate() &&
+          scheduleDate.getMonth() === selectedDate.getMonth() &&
+          scheduleDate.getFullYear() === selectedDate.getFullYear()
+        );
+      });
+
+      // Generate time slots from schedules
+      const times: string[] = [];
+      dateSchedules.forEach((schedule) => {
+        const startTime = parse(schedule.startTime, "HH:mm", new Date());
+        const endTime = parse(schedule.endTime, "HH:mm", new Date());
+
+        // Generate 30-minute slots
+        let currentSlot = startTime;
+        while (currentSlot < endTime) {
+          const formattedTime = format(currentSlot, "h:mm a");
+          times.push(formattedTime);
+
+          // Add 30 minutes for next slot
+          currentSlot = new Date(currentSlot.getTime() + 30 * 60000);
+        }
+      });
+
+      setTimeOptions(
+        [...new Set(times)].sort((a, b) => {
+          return (
+            parse(a, "h:mm a", new Date()).getTime() -
+            parse(b, "h:mm a", new Date()).getTime()
+          );
+        }),
+      );
+    } else {
+      setTimeOptions([]);
+    }
+  }, [selectedDate, availableSchedules]);
 
   // Initialize form
   const form = useForm<AppointmentFormData>({
     defaultValues: {
       date: new Date(),
-      time: "8:00 AM",
+      time: "",
       requesterName: "",
       requesterType: "estudiante",
       serviceType: "",
@@ -93,6 +229,56 @@ export default function AppointmentForm({
       recommendations: "",
     },
   });
+
+  // Check if date has available schedules
+  const hasSchedulesForDate = (date: Date): boolean => {
+    return availableSchedules.some((schedule) => {
+      const scheduleDate = new Date(schedule.date);
+      return (
+        scheduleDate.getDate() === date.getDate() &&
+        scheduleDate.getMonth() === date.getMonth() &&
+        scheduleDate.getFullYear() === date.getFullYear()
+      );
+    });
+  };
+
+  // Get specialists for selected service
+  const getSpecialistsForService = (serviceTitle: string): Specialist[] => {
+    const result = serviceSpecialistsMap[serviceTitle] || [];
+    console.log(`Getting specialists for service "${serviceTitle}":`, result);
+    return result;
+  };
+
+  // Handle service selection
+  const handleServiceChange = (serviceTitle: string) => {
+    console.log(`Service changed to "${serviceTitle}"`);
+    setSelectedService(serviceTitle);
+    setSelectedSpecialist("");
+    form.setValue("serviceType", serviceTitle);
+    form.setValue("specialistId", "");
+    form.setValue("specialistName", "");
+    setAvailableSchedules([]);
+    setTimeOptions([]);
+
+    // Debug the specialists available for this service
+    const specialists = serviceSpecialistsMap[serviceTitle] || [];
+    console.log(
+      `Available specialists for service "${serviceTitle}":`,
+      specialists,
+    );
+  };
+
+  // Handle specialist selection
+  const handleSpecialistChange = (specialistId: string) => {
+    setSelectedSpecialist(specialistId);
+    form.setValue("specialistId", specialistId);
+
+    // Find specialist name
+    const specialist = specialists.find((s) => s.id === specialistId);
+    if (specialist) {
+      form.setValue("specialistName", specialist.name);
+    }
+  };
 
   // On form submission
   const onSubmit = async (data: AppointmentFormData) => {
@@ -138,6 +324,9 @@ export default function AppointmentForm({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Agendar Cita</DialogTitle>
+          <DialogDescription>
+            Complete el formulario para agendar una nueva cita.
+          </DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -157,6 +346,7 @@ export default function AppointmentForm({
                           <Button
                             variant="outline"
                             className="w-full pl-3 text-left font-normal"
+                            disabled={!selectedSpecialist || loadingData}
                           >
                             {field.value ? (
                               format(field.value, "PPP", { locale: es })
@@ -170,8 +360,16 @@ export default function AppointmentForm({
                         <Calendar
                           mode="single"
                           selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) => date < new Date()}
+                          onSelect={(date) => {
+                            if (date) {
+                              field.onChange(date);
+                              setSelectedDate(date);
+                              form.setValue("time", ""); // Reset time when date changes
+                            }
+                          }}
+                          disabled={(date) =>
+                            date < new Date() || !hasSchedulesForDate(date)
+                          }
                           initialFocus
                         />
                       </PopoverContent>
@@ -190,7 +388,8 @@ export default function AppointmentForm({
                     <FormLabel>Hora</FormLabel>
                     <Select
                       onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      value={field.value}
+                      disabled={timeOptions.length === 0 || loadingData}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -198,11 +397,21 @@ export default function AppointmentForm({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {timeOptions.map((time) => (
-                          <SelectItem key={time} value={time}>
-                            {time}
+                        {timeOptions.length > 0 ? (
+                          timeOptions.map((time) => (
+                            <SelectItem key={time} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no-options" disabled>
+                            {loadingData
+                              ? "Cargando horarios..."
+                              : !selectedSpecialist
+                                ? "Primero seleccione un especialista"
+                                : "No hay horarios disponibles"}
                           </SelectItem>
-                        ))}
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -221,8 +430,11 @@ export default function AppointmentForm({
                   <FormItem>
                     <FormLabel>Servicio</FormLabel>
                     <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        handleServiceChange(value);
+                      }}
+                      value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -230,11 +442,13 @@ export default function AppointmentForm({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {services.map((service) => (
-                          <SelectItem key={service.id} value={service.title}>
-                            {service.title}
-                          </SelectItem>
-                        ))}
+                        {services
+                          .filter((service) => service.isActive)
+                          .map((service) => (
+                            <SelectItem key={service.id} value={service.title}>
+                              {service.title}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -264,10 +478,7 @@ export default function AppointmentForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Estamento</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Seleccionar estamento" />
@@ -287,19 +498,20 @@ export default function AppointmentForm({
                 )}
               />
 
-              {/* Specialist (Temporary static selection - would come from backend in real app) */}
+              {/* Specialist */}
               <FormField
                 control={form.control}
-                name="specialistName"
+                name="specialistId"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Especialista</FormLabel>
                     <Select
                       onValueChange={(value) => {
                         field.onChange(value);
-                        form.setValue("specialistId", value); // Use the name as ID for now
+                        handleSpecialistChange(value);
                       }}
-                      defaultValue={field.value}
+                      value={field.value}
+                      disabled={!selectedService}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -307,15 +519,29 @@ export default function AppointmentForm({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="Dr. Juan Pérez">
-                          Dr. Juan Pérez
-                        </SelectItem>
-                        <SelectItem value="Dra. María López">
-                          Dra. María López
-                        </SelectItem>
-                        <SelectItem value="Dr. Carlos Rodríguez">
-                          Dr. Carlos Rodríguez
-                        </SelectItem>
+                        {selectedService ? (
+                          getSpecialistsForService(selectedService).length >
+                          0 ? (
+                            getSpecialistsForService(selectedService).map(
+                              (specialist) => (
+                                <SelectItem
+                                  key={specialist.id}
+                                  value={specialist.id}
+                                >
+                                  {specialist.name}
+                                </SelectItem>
+                              ),
+                            )
+                          ) : (
+                            <SelectItem value="no-specialists" disabled>
+                              No hay especialistas disponibles
+                            </SelectItem>
+                          )
+                        ) : (
+                          <SelectItem value="select-service" disabled>
+                            Primero seleccione un servicio
+                          </SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -414,7 +640,7 @@ export default function AppointmentForm({
               <Button
                 type="submit"
                 className="bg-indigo-600 hover:bg-indigo-700"
-                disabled={loading}
+                disabled={loading || !timeOptions.length}
               >
                 {loading ? (
                   <>

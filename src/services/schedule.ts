@@ -1,82 +1,161 @@
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  getDoc,
+  query,
+  serverTimestamp,
+  Timestamp,
+  where,
+  orderBy,
+} from "firebase/firestore";
+
+import { db } from "@/lib/firebase";
 import { Schedule, ScheduleFormData } from "@/types/schedule";
 
-import {
-  getSchedulesFromStorage,
-  saveSchedulesToStorage,
-} from "./localStorage";
+const COLLECTION_NAME = "schedules";
+
+// Helper function to convert Firestore document to Schedule
+const convertScheduleDoc = (doc: any): Schedule => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    specialistId: data.specialistId || "",
+    specialistName: data.specialistName || "",
+    date:
+      data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date),
+    startTime: data.startTime || "",
+    endTime: data.endTime || "",
+    createdAt: data.createdAt?.toDate() || new Date(),
+    updatedAt: data.updatedAt?.toDate() || new Date(),
+  };
+};
 
 // Get all schedules
 export const getAllSchedules = async (): Promise<Schedule[]> => {
-  return getSchedulesFromStorage();
-};
-
-// Get schedules by date
-export const getSchedulesByDate = async (date: Date): Promise<Schedule[]> => {
-  const schedules = getSchedulesFromStorage();
-  return schedules.filter((schedule) => {
-    const scheduleDate = new Date(schedule.date);
-    return (
-      scheduleDate.getDate() === date.getDate() &&
-      scheduleDate.getMonth() === date.getMonth() &&
-      scheduleDate.getFullYear() === date.getFullYear()
+  try {
+    const schedulesQuery = query(
+      collection(db, COLLECTION_NAME),
+      orderBy("date", "asc"),
     );
-  });
+
+    const querySnapshot = await getDocs(schedulesQuery);
+    const schedules: Schedule[] = [];
+
+    querySnapshot.forEach((doc) => {
+      schedules.push(convertScheduleDoc(doc));
+    });
+
+    return schedules;
+  } catch (error) {
+    console.error("Error getting schedules:", error);
+    throw error;
+  }
 };
 
-// Get schedules by specialist
-export const getSchedulesBySpecialist = async (
+// Get schedules by specialist ID
+export const getSchedulesBySpecialistId = async (
   specialistId: string,
 ): Promise<Schedule[]> => {
-  const schedules = getSchedulesFromStorage();
-  return schedules.filter((schedule) => schedule.specialistId === specialistId);
+  try {
+    const schedulesQuery = query(
+      collection(db, COLLECTION_NAME),
+      where("specialistId", "==", specialistId),
+      orderBy("date", "asc"),
+    );
+
+    const querySnapshot = await getDocs(schedulesQuery);
+    const schedules: Schedule[] = [];
+
+    querySnapshot.forEach((doc) => {
+      schedules.push(convertScheduleDoc(doc));
+    });
+
+    return schedules;
+  } catch (error) {
+    console.error("Error getting schedules by specialist:", error);
+    throw error;
+  }
+};
+
+// Get schedule by ID
+export const getScheduleById = async (id: string): Promise<Schedule | null> => {
+  try {
+    const scheduleDoc = await getDoc(doc(db, COLLECTION_NAME, id));
+
+    if (scheduleDoc.exists()) {
+      return convertScheduleDoc(scheduleDoc);
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error getting schedule:", error);
+    throw error;
+  }
 };
 
 // Create a new schedule
 export const createSchedule = async (
   scheduleData: ScheduleFormData,
 ): Promise<Schedule> => {
-  const schedules = getSchedulesFromStorage();
+  try {
+    // Add timestamps
+    const newScheduleData = {
+      ...scheduleData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
 
-  const newSchedule: Schedule = {
-    ...scheduleData,
-    id: `schedule${schedules.length + 1}`,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+    // Save the schedule to Firestore
+    const docRef = await addDoc(
+      collection(db, COLLECTION_NAME),
+      newScheduleData,
+    );
 
-  const updatedSchedules = [...schedules, newSchedule];
-  saveSchedulesToStorage(updatedSchedules);
+    // Create the schedule object to return
+    const newSchedule: Schedule = {
+      id: docRef.id,
+      ...scheduleData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
 
-  return newSchedule;
+    return newSchedule;
+  } catch (error) {
+    console.error("Error creating schedule:", error);
+    throw error;
+  }
 };
 
-// Update a schedule
+// Update an existing schedule
 export const updateSchedule = async (
   id: string,
   scheduleData: Partial<ScheduleFormData>,
-): Promise<Schedule> => {
-  const schedules = getSchedulesFromStorage();
-  const scheduleIndex = schedules.findIndex((s) => s.id === id);
+): Promise<void> => {
+  try {
+    // Create update data with timestamp
+    const updateData = {
+      ...scheduleData,
+      updatedAt: serverTimestamp(),
+    };
 
-  if (scheduleIndex === -1) {
-    throw new Error(`Schedule with ID ${id} not found`);
+    // Update the schedule in Firestore
+    await updateDoc(doc(db, COLLECTION_NAME, id), updateData);
+  } catch (error) {
+    console.error("Error updating schedule:", error);
+    throw error;
   }
-
-  const updatedSchedule: Schedule = {
-    ...schedules[scheduleIndex],
-    ...scheduleData,
-    updatedAt: new Date(),
-  };
-
-  schedules[scheduleIndex] = updatedSchedule;
-  saveSchedulesToStorage(schedules);
-
-  return updatedSchedule;
 };
 
 // Delete a schedule
 export const deleteSchedule = async (id: string): Promise<void> => {
-  const schedules = getSchedulesFromStorage();
-  const updatedSchedules = schedules.filter((s) => s.id !== id);
-  saveSchedulesToStorage(updatedSchedules);
+  try {
+    await deleteDoc(doc(db, COLLECTION_NAME, id));
+  } catch (error) {
+    console.error("Error deleting schedule:", error);
+    throw error;
+  }
 };
