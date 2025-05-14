@@ -1,15 +1,60 @@
 import { Icon } from "@iconify/react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import useAuth from "@/hooks/useAuth";
+import { getAppointmentsByUserId } from "@/services/appointment";
+import { getUserData } from "@/services/user";
+import { Appointment } from "@/types/appointment";
 
 export default function Home() {
   const { user } = useAuth();
+  const [userName, setUserName] = useState<string>("Usuario");
+  const [upcomingAppointments, setUpcomingAppointments] = useState<
+    Appointment[]
+  >([]);
+  const [loading, setLoading] = useState(true);
 
-  // Extract display name or email to welcome the user
-  const userName = user?.displayName || user?.email?.split("@")[0] || "Usuario";
+  useEffect(() => {
+    const loadUserData = async () => {
+      if (!user) return;
+
+      try {
+        setLoading(true);
+
+        // Fetch user data from Firestore to get full name
+        const userData = await getUserData(user.uid);
+        if (userData?.fullName) {
+          setUserName(userData.fullName);
+        } else if (user.displayName) {
+          setUserName(user.displayName);
+        } else if (user.email) {
+          setUserName(user.email.split("@")[0]);
+        }
+
+        // Fetch user's appointments
+        const appointments = await getAppointmentsByUserId(user.uid);
+
+        // Filter to only pending appointments with future dates
+        const pendingAppointments = appointments.filter(
+          (appointment) =>
+            appointment.status === "pendiente" &&
+            appointment.date >= new Date(),
+        );
+
+        setUpcomingAppointments(pendingAppointments);
+      } catch (error) {
+        console.error("Error loading user data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUserData();
+  }, [user]);
 
   return (
     <div className="space-y-6">
@@ -39,10 +84,22 @@ export default function Home() {
             />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">
-              No tienes citas pendientes
-            </p>
+            {loading ? (
+              <div className="text-2xl font-bold">...</div>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">
+                  {upcomingAppointments.length}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {upcomingAppointments.length === 0
+                    ? "No tienes citas pendientes"
+                    : upcomingAppointments.length === 1
+                      ? "Tienes 1 cita pendiente"
+                      : `Tienes ${upcomingAppointments.length} citas pendientes`}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -66,7 +123,7 @@ export default function Home() {
 
       {/* Quick Access */}
       <h2 className="mt-8 text-xl font-semibold">Acceso Rápido</h2>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
         <Card className="transition-colors hover:bg-slate-50">
           <Link to="/dashboard/datos-personales">
             <CardHeader>
@@ -99,24 +156,6 @@ export default function Home() {
             <CardContent>
               <p className="text-sm text-muted-foreground">
                 Agenda, consulta o cancela citas en nuestros servicios
-              </p>
-            </CardContent>
-          </Link>
-        </Card>
-        <Card className="transition-colors hover:bg-slate-50">
-          <Link to="/dashboard/consultar-usuario">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Icon
-                  icon="material-symbols:search"
-                  className="h-5 w-5 text-indigo-600"
-                />
-                <CardTitle className="text-base">Consultar Usuario</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Busca información de otros usuarios del sistema
               </p>
             </CardContent>
           </Link>

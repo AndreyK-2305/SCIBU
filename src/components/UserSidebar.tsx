@@ -1,5 +1,5 @@
 import { Icon } from "@iconify/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 
 import {
@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/popover";
 import useAuth from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import { getUserData } from "@/services/user";
 
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
@@ -36,16 +37,34 @@ const navItems: NavItem[] = [
     icon: "material-symbols:calendar-month",
     url: "/dashboard/citas",
   },
-  {
-    label: "Consultar Usuario",
-    icon: "material-symbols:search",
-    url: "/dashboard/consultar-usuario",
-  },
 ];
 
 export default function UserSidebar() {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const { pathname } = useLocation();
+  const [userName, setUserName] = useState<string>("Usuario");
+
+  useEffect(() => {
+    const loadUserData = async () => {
+      if (!user) return;
+
+      try {
+        // Fetch user data from Firestore to get full name
+        const userData = await getUserData(user.uid);
+        if (userData?.fullName) {
+          setUserName(userData.fullName);
+        } else if (user.displayName) {
+          setUserName(user.displayName);
+        } else if (user.email) {
+          setUserName(user.email.split("@")[0]);
+        }
+      } catch (error) {
+        console.error("Error loading user data:", error);
+      }
+    };
+
+    loadUserData();
+  }, [user]);
 
   // Compare the current path with navigation items
   const currentNavItem = navItems.find((item) => pathname === item.url);
@@ -88,7 +107,7 @@ export default function UserSidebar() {
             </PopoverTrigger>
             <PopoverContent className="w-fit">
               <p className="text-center font-bold">Usuario</p>
-              <p className="text-center text-sm">USUARIO</p>
+              <p className="text-center text-sm">{userName}</p>
               <Separator className="my-4" />
               <Button variant="outline" onClick={logout}>
                 Cerrar Sesión

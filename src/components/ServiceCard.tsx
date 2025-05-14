@@ -1,9 +1,11 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { getSpecialistById } from "@/services/specialist";
 import { Service } from "@/types/service";
+import { Specialist } from "@/types/specialist";
 
 interface ServiceCardProps {
   service: Service;
@@ -20,6 +22,52 @@ export default function ServiceCard({
   // Handle both title and name properties
   const title = service.title || service.name || "Sin título";
   const { description, specialists, isActive } = service;
+
+  // Add state to store the loaded specialist names
+  const [specialistNames, setSpecialistNames] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch specialist details when the component mounts
+  useEffect(() => {
+    const fetchSpecialists = async () => {
+      if (!specialists || specialists.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const specialistDetails = await Promise.all(
+          specialists.map(async (specialistId) => {
+            try {
+              const specialist = await getSpecialistById(specialistId);
+              return {
+                id: specialistId,
+                name: specialist
+                  ? specialist.name
+                  : "Especialista no encontrado",
+              };
+            } catch (error) {
+              console.error(
+                `Error fetching specialist ${specialistId}:`,
+                error,
+              );
+              return { id: specialistId, name: "Error al cargar especialista" };
+            }
+          }),
+        );
+
+        setSpecialistNames(specialistDetails);
+      } catch (error) {
+        console.error("Error fetching specialists:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSpecialists();
+  }, [specialists]);
 
   return (
     <Card className="rounded-lg border p-6 shadow-sm">
@@ -55,10 +103,12 @@ export default function ServiceCard({
           <div>
             <h3 className="font-semibold text-gray-800">Especialistas</h3>
             <div className="space-y-1">
-              {specialists.length > 0 ? (
-                specialists.map((specialistId, index) => (
-                  <p key={index} className="text-gray-600">
-                    Dr. {specialistId}
+              {loading ? (
+                <p className="text-gray-500">Cargando especialistas...</p>
+              ) : specialistNames.length > 0 ? (
+                specialistNames.map((specialist) => (
+                  <p key={specialist.id} className="text-gray-600">
+                    {specialist.name}
                   </p>
                 ))
               ) : (
