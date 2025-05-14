@@ -6,7 +6,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
 } from "firebase/auth";
-import { doc, getDoc, Firestore } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -26,7 +26,8 @@ import { InputPassword } from "@/components/ui/input-password";
 import useAuth from "@/hooks/useAuth";
 import { handleFirebaseError } from "@/lib/error";
 import { db } from "@/lib/firebase";
-import { ADMIN_CREDENTIALS } from "@/utils/adminInfo";
+
+//import { ADMIN_CREDENTIALS } from "@/utils/adminInfo";
 
 export default function Login() {
   const { auth } = useAuth();
@@ -238,61 +239,6 @@ export default function Login() {
                 <Icon icon="flat-color:google" className="mr-2 h-5 w-5" />
                 Google
               </Button>
-
-              {import.meta.env.DEV && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="mt-2 h-10 w-full border-indigo-200 font-semibold text-indigo-600"
-                  onClick={async () => {
-                    try {
-                      console.log(
-                        "Iniciando sesión con credenciales de admin predefinidas",
-                      );
-
-                      const userCredential = await signInWithEmailAndPassword(
-                        auth,
-                        ADMIN_CREDENTIALS.email,
-                        ADMIN_CREDENTIALS.password,
-                      );
-                      console.log(
-                        "Inicio de sesión como admin exitoso:",
-                        userCredential.user.uid,
-                      );
-                      toast.success(
-                        "Inicio de sesión como administrador exitoso",
-                      );
-
-                      // Redirigir al dashboard después de login admin exitoso
-                      setTimeout(() => {
-                        navigate("/dashboard");
-                      }, 500);
-                    } catch (error) {
-                      console.error("Error en inicio de sesión admin:", error);
-
-                      if (
-                        error instanceof FirebaseError &&
-                        error.code === "auth/user-not-found"
-                      ) {
-                        toast.error(
-                          "Usuario admin no existe. Visita la página de admin-setup para crearlo.",
-                        );
-                        setTimeout(() => {
-                          window.location.href = "#/admin-setup";
-                        }, 2000);
-                      } else {
-                        toast.error("Error al iniciar sesión como admin");
-                      }
-                    }
-                  }}
-                >
-                  <Icon
-                    icon="carbon:user-admin"
-                    className="mr-2 h-5 w-5 text-indigo-600"
-                  />
-                  Acceso Admin
-                </Button>
-              )}
 
               <p className="text-center text-sm text-gray-600">
                 ¿No tienes una cuenta?{" "}
