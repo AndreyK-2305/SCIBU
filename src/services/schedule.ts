@@ -102,9 +102,14 @@ export const createSchedule = async (
   scheduleData: ScheduleFormData,
 ): Promise<Schedule> => {
   try {
+    // Ensure the date is set to noon UTC to avoid timezone issues
+    const date = new Date(scheduleData.date);
+    date.setUTCHours(12, 0, 0, 0);
+
     // Add timestamps
     const newScheduleData = {
       ...scheduleData,
+      date: date,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
@@ -119,6 +124,7 @@ export const createSchedule = async (
     const newSchedule: Schedule = {
       id: docRef.id,
       ...scheduleData,
+      date: date,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

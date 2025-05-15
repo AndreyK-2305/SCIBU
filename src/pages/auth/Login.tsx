@@ -26,7 +26,7 @@ import { InputPassword } from "@/components/ui/input-password";
 import useAuth from "@/hooks/useAuth";
 import { handleFirebaseError } from "@/lib/error";
 import { db } from "@/lib/firebase";
-import { createUserData, getUserData } from "@/services/user";
+import { createUserData, getUserData, updateUserData } from "@/services/user";
 
 //import { ADMIN_CREDENTIALS } from "@/utils/adminInfo";
 
@@ -135,14 +135,15 @@ export default function Login() {
         const displayName = userCredential.user.displayName || "";
         const email = userCredential.user.email || "";
 
-        // Crear datos de usuario con la información de Google usando createUserData
+        // Considerar esto como un perfil básico (incompleto)
+        // Estos campos estarán vacíos, lo que marca el perfil como incompleto
         await createUserData(userCredential.user.uid, {
           email,
           fullName: displayName,
           documentType: "",
-          documentNumber: "",
-          birthDate: "",
-          phone: "",
+          documentNumber: "", // Campo requerido vacío = perfil incompleto
+          birthDate: "", // Campo requerido vacío = perfil incompleto
+          phone: "", // Campo requerido vacío = perfil incompleto
           gender: "",
           code: "",
           status: "",
@@ -152,7 +153,21 @@ export default function Login() {
           role: "beneficiario",
         });
 
-        console.log("Datos de usuario de Google creados con éxito");
+        console.log(
+          "Datos de usuario de Google creados con éxito (perfil incompleto)",
+        );
+      } else if (userData.isProfileComplete === true) {
+        // Verificar si realmente el perfil está completo según nuestros criterios
+        const isActuallyComplete =
+          userData.documentNumber && userData.birthDate && userData.phone;
+
+        // Si el sistema dice que está completo pero falta información crítica, actualizarlo
+        if (!isActuallyComplete) {
+          console.log("Corrigiendo estado de perfil a incompleto");
+          await updateUserData(userCredential.user.uid, {
+            isProfileComplete: false,
+          });
+        }
       }
 
       // Verificar permisos de Firestore

@@ -10,6 +10,7 @@ export interface Specialist {
 }
 
 export interface SpecialistFormData {
+  id?: string;
   name: string;
   email: string;
   phone: string;

@@ -182,6 +182,11 @@ export default function SpecialistModal({
         (specialistData as any).password = password;
       }
 
+      // If editing an existing specialist, include the ID
+      if (specialist) {
+        (specialistData as any).id = specialist.id;
+      }
+
       console.log("Datos del especialista preparados:", specialistData);
 
       // Llamar a la función de guardado proporcionada por el padre

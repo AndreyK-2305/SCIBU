@@ -121,13 +121,13 @@ export default function Especialistas() {
   // Function to save a specialist (new or edited)
   const handleSaveSpecialist = async (specialistData: SpecialistFormData) => {
     try {
-      if (currentSpecialist) {
+      if (specialistData.id) {
         // Update existing specialist in Firebase
-        await updateSpecialist(currentSpecialist.id, specialistData);
+        await updateSpecialist(specialistData.id, specialistData);
 
         // Update the specialist in the local state
         const updatedSpecialists = specialists.map((s) =>
-          s.id === currentSpecialist.id
+          s.id === specialistData.id
             ? {
                 ...s,
                 ...specialistData,
@@ -238,6 +238,7 @@ export default function Especialistas() {
                 specialist={specialist}
                 onEdit={() => handleEditSpecialist(specialist)}
                 onToggleStatus={() => handleToggleStatus(specialist)}
+                availableServices={availableServices}
               />
             ))}
           </div>

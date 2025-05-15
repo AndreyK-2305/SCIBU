@@ -3,29 +3,28 @@ import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { sampleServices } from "@/data/sampleData";
+import { Service } from "@/types/service";
 import { Specialist } from "@/types/specialist";
 
 interface SpecialistCardProps {
   specialist: Specialist;
   onEdit: () => void;
   onToggleStatus: () => void;
+  availableServices: Service[];
 }
 
 export default function SpecialistCard({
   specialist,
   onEdit,
   onToggleStatus,
+  availableServices,
 }: SpecialistCardProps) {
   const { name, email, phone, services, isActive } = specialist;
 
-  // Get actual service titles from the sample data
-  const serviceDetails = services.map((serviceName) => {
-    // Try to find by exact title match or by ID
-    const service = sampleServices.find(
-      (s) => s.title === serviceName || s.id === serviceName,
-    );
-    return service ? service.title : serviceName;
+  // Get actual service titles from the available services
+  const serviceDetails = services.map((serviceId) => {
+    const service = availableServices.find((s) => s.id === serviceId);
+    return service ? service.title : "Servicio no encontrado";
   });
 
   return (

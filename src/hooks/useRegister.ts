@@ -99,13 +99,14 @@ export function useRegister() {
       const email = userCredential.user.email || "";
 
       // Crear datos de usuario con la información de Google
+      // Estos campos estarán vacíos, lo que marca el perfil como incompleto
       await createUserData(userCredential.user.uid, {
         email,
         fullName: displayName,
         documentType: "",
-        documentNumber: "",
-        birthDate: "",
-        phone: "",
+        documentNumber: "", // Campo requerido vacío = perfil incompleto
+        birthDate: "", // Campo requerido vacío = perfil incompleto
+        phone: "", // Campo requerido vacío = perfil incompleto
         gender: "",
         code: "",
         status: "",
@@ -114,7 +115,9 @@ export function useRegister() {
         socialPrograms: [],
         role: "beneficiario", // Rol por defecto
       });
-      console.log("User data created in Firestore with Google profile info");
+      console.log(
+        "User data created in Firestore with Google profile info (perfil incompleto)",
+      );
 
       // Manejar el registro exitoso
       await handleSuccessfulRegistration();

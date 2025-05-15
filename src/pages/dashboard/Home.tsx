@@ -17,6 +17,9 @@ export default function Home() {
     Appointment[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [isProfileComplete, setIsProfileComplete] = useState<boolean | null>(
+    null,
+  );
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -34,6 +37,9 @@ export default function Home() {
         } else if (user.email) {
           setUserName(user.email.split("@")[0]);
         }
+
+        // Check if profile is complete
+        setIsProfileComplete(userData?.isProfileComplete === true);
 
         // Fetch user's appointments
         const appointments = await getAppointmentsByUserId(user.uid);
@@ -113,10 +119,36 @@ export default function Home() {
             />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">Completo</div>
-            <p className="text-xs text-muted-foreground">
-              Tu perfil está al día
-            </p>
+            {loading ? (
+              <div className="text-2xl font-bold">...</div>
+            ) : (
+              <>
+                {isProfileComplete ? (
+                  <>
+                    <div className="text-2xl font-bold text-green-500">
+                      Completo
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Tu perfil está al día
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold text-amber-500">
+                      Incompleto
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      <Link
+                        to="/dashboard/datos-personales"
+                        className="text-amber-500 hover:underline"
+                      >
+                        Completa tu información personal
+                      </Link>
+                    </p>
+                  </>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
