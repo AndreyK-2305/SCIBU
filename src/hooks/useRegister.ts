@@ -94,12 +94,27 @@ export function useRegister() {
       const userCredential = await signInWithPopup(auth, provider);
       console.log("User created in Firebase Auth:", userCredential.user.uid);
 
-      // Crear datos iniciales
-      await createInitialUserData(
-        userCredential.user.uid,
-        userCredential.user.email || "",
-      );
-      console.log("User data created in Firestore");
+      // Obtener información del perfil de Google
+      const displayName = userCredential.user.displayName || "";
+      const email = userCredential.user.email || "";
+
+      // Crear datos de usuario con la información de Google
+      await createUserData(userCredential.user.uid, {
+        email,
+        fullName: displayName,
+        documentType: "",
+        documentNumber: "",
+        birthDate: "",
+        phone: "",
+        gender: "",
+        code: "",
+        status: "",
+        program: "",
+        populationGroups: [],
+        socialPrograms: [],
+        role: "beneficiario", // Rol por defecto
+      });
+      console.log("User data created in Firestore with Google profile info");
 
       // Manejar el registro exitoso
       await handleSuccessfulRegistration();

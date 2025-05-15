@@ -26,6 +26,7 @@ import { InputPassword } from "@/components/ui/input-password";
 import useAuth from "@/hooks/useAuth";
 import { handleFirebaseError } from "@/lib/error";
 import { db } from "@/lib/firebase";
+import { createUserData, getUserData } from "@/services/user";
 
 //import { ADMIN_CREDENTIALS } from "@/utils/adminInfo";
 
@@ -122,6 +123,37 @@ export default function Login() {
       console.log("Iniciando autenticación con Google");
       const userCredential = await signInWithPopup(auth, provider);
       console.log("Autenticación con Google exitosa");
+
+      // Verificar si el usuario ya existe en Firestore
+      const userData = await getUserData(userCredential.user.uid);
+
+      // Si el usuario no existe en Firestore, crear los datos iniciales con la información de Google
+      if (!userData) {
+        console.log("Creando datos de usuario de Google en Firestore");
+
+        // Obtener información del perfil de Google
+        const displayName = userCredential.user.displayName || "";
+        const email = userCredential.user.email || "";
+
+        // Crear datos de usuario con la información de Google usando createUserData
+        await createUserData(userCredential.user.uid, {
+          email,
+          fullName: displayName,
+          documentType: "",
+          documentNumber: "",
+          birthDate: "",
+          phone: "",
+          gender: "",
+          code: "",
+          status: "",
+          program: "",
+          populationGroups: [],
+          socialPrograms: [],
+          role: "beneficiario",
+        });
+
+        console.log("Datos de usuario de Google creados con éxito");
+      }
 
       // Verificar permisos de Firestore
       const firestoreAccess = await checkFirestorePermissions(
