@@ -81,9 +81,11 @@ export default async function handler(
     "http://localhost:3000",
   ];
 
+  // Permitir cualquier origen en desarrollo o si está en la lista
   if (origin && allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   } else {
+    // En producción, permitir cualquier origen (ajusta según necesites)
     res.setHeader("Access-Control-Allow-Origin", "*");
   }
 
