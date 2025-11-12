@@ -1,6 +1,7 @@
 import { Icon } from "@iconify/react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { CSVUserData, createUserFromCSV } from "@/services/user";
+import { ADMIN_CREDENTIALS } from "@/utils/adminInfo";
+import useAuth from "@/hooks/useAuth";
 
 interface ImportUsersModalProps {
   isOpen: boolean;
@@ -24,6 +27,7 @@ export default function ImportUsersModal({
   onClose,
   onImportComplete,
 }: ImportUsersModalProps) {
+  const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -124,6 +128,9 @@ export default function ImportUsersModal({
     setProgress(0);
     setResults(null);
 
+    // Guardar el email del admin actual antes de empezar
+    const adminEmailBeforeImport = user?.email;
+
     try {
       // Leer el archivo
       const text = await file.text();
@@ -142,24 +149,24 @@ export default function ImportUsersModal({
 
       // Procesar usuarios uno por uno
       for (let i = 0; i < users.length; i++) {
-        const user = users[i];
+        const userData = users[i];
         setProgress(((i + 1) / total) * 100);
 
         try {
-          const result = await createUserFromCSV(user, "123456");
+          const result = await createUserFromCSV(userData, "123456");
           if (result.success) {
             success++;
           } else {
             errors++;
             errorDetails.push({
-              email: user.email,
+              email: userData.email,
               error: result.error || "Error desconocido",
             });
           }
         } catch (error: any) {
           errors++;
           errorDetails.push({
-            email: user.email,
+            email: userData.email,
             error: error.message || "Error desconocido",
           });
         }
@@ -183,25 +190,21 @@ export default function ImportUsersModal({
         );
       }
 
-      // Cerrar sesión al finalizar la importación (si se crearon usuarios)
-      if (success > 0) {
-        // Importar signOut desde firebase/auth
-        const { getAuth, signOut } = await import("firebase/auth");
-        const auth = getAuth();
-        
+      // Restaurar la sesión del admin si se crearon usuarios
+      if (success > 0 && adminEmailBeforeImport === ADMIN_CREDENTIALS.email) {
         try {
-          await signOut(auth);
-          toast.info(
-            "Importación completada. Tu sesión se cerró. Por favor, vuelve a iniciar sesión.",
-            { duration: 5000 },
+          const auth = getAuth();
+          await signInWithEmailAndPassword(
+            auth,
+            ADMIN_CREDENTIALS.email,
+            ADMIN_CREDENTIALS.password,
           );
-          
-          // Redirigir al login después de un breve delay
-          setTimeout(() => {
-            window.location.href = "/auth/login";
-          }, 2000);
+          toast.success("Sesión de administrador restaurada correctamente");
         } catch (error) {
-          console.error("Error al cerrar sesión:", error);
+          console.error("Error al restaurar sesión de admin:", error);
+          toast.warning(
+            "No se pudo restaurar tu sesión. Por favor, vuelve a iniciar sesión.",
+          );
         }
       }
 
@@ -253,18 +256,17 @@ TI,9876543210,María García,maria.garcia@example.com,20241002,Psicología`;
           </DialogDescription>
         </DialogHeader>
 
-        {/* Advertencia importante */}
-        <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
+        {/* Información importante */}
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
           <div className="flex items-start gap-2">
-            <Icon icon="ph:warning" className="h-5 w-5 text-amber-600 mt-0.5" />
+            <Icon icon="ph:info" className="h-5 w-5 text-blue-600 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-900">
-                ⚠️ Advertencia Importante
+              <p className="text-sm font-semibold text-blue-900">
+                ℹ️ Información
               </p>
-              <p className="text-xs text-amber-800 mt-1">
-                Después de importar usuarios, tu sesión se cerrará automáticamente 
-                y deberás volver a iniciar sesión. Esto es necesario para crear 
-                las cuentas de los usuarios correctamente.
+              <p className="text-xs text-blue-800 mt-1">
+                Durante la importación, se crearán las cuentas de los usuarios. 
+                Tu sesión de administrador se restaurará automáticamente al finalizar.
               </p>
             </div>
           </div>

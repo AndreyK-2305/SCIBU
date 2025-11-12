@@ -271,8 +271,10 @@ export async function createUserFromCSV(
       isProfileComplete: false, // Perfil incompleto porque faltan campos requeridos
     });
 
-    // NO cerrar sesión aquí - se cerrará al final de la importación completa
-    // Esto permite crear múltiples usuarios en secuencia
+    // Cerrar sesión inmediatamente después de crear el usuario
+    // Esto evita que el último usuario creado quede autenticado
+    const { signOut } = await import("firebase/auth");
+    await signOut(auth);
 
     return { success: true, userId };
   } catch (error: any) {
