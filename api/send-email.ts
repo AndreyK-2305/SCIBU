@@ -11,6 +11,30 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ) {
+  // Configurar CORS headers
+  const origin = req.headers.origin || "";
+  const allowedOrigins = [
+    "https://andreyk-2305.github.io",
+    "http://localhost:5173",
+    "http://localhost:3000",
+  ];
+
+  // Permitir cualquier origen en desarrollo o si está en la lista
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else {
+    // En producción, permitir cualquier origen (ajusta según necesites)
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  // Manejar preflight request
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   // Solo permitir POST
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
