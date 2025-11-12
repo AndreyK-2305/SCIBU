@@ -99,29 +99,18 @@ export default async function handler(
     console.log("Sending email via Resend to:", recipientEmail);
 
     // Enviar email usando Resend
-    const result = await resend.emails.send({
+    const data = await resend.emails.send({
       from: FROM_EMAIL,
       to: recipientEmail,
       subject: finalSubject,
       html: finalHtml,
     });
 
-    // Verificar si hay error en la respuesta
-    if (result.error) {
-      console.error("Resend API error:", result.error);
-      return res.status(500).json({
-        error: "Failed to send email",
-        message: result.error.message || "Unknown error from Resend",
-      });
-    }
-
-    // Si hay data, usar el id
-    const emailId = result.data?.id || "unknown";
-    console.log("Email sent successfully:", emailId);
+    console.log("Email sent successfully:", data.id);
 
     return res.status(200).json({
       success: true,
-      id: emailId,
+      id: data.id,
     });
   } catch (error: any) {
     console.error("Error sending email:", error);

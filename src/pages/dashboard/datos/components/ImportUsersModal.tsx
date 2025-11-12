@@ -1,5 +1,5 @@
 import { Icon } from "@iconify/react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { CSVUserData } from "@/services/user";
+import { CSVUserData, createUserFromCSV } from "@/services/user";
 
 interface ImportUsersModalProps {
   isOpen: boolean;
@@ -113,28 +113,7 @@ export default function ImportUsersModal({
     }
   };
 
-  // Función para obtener la URL de la API de importación
-  const getImportApiUrl = (): string => {
-    // Si hay una variable de entorno configurada, usarla
-    if (import.meta.env.VITE_API_URL) {
-      const baseUrl = import.meta.env.VITE_API_URL.replace("/api/send-email", "");
-      return `${baseUrl}/api/import-users`;
-    }
-
-    // Detectar si estamos en GitHub Pages
-    const isGitHubPages =
-      window.location.hostname.includes("github.io") ||
-      window.location.hostname.includes("github.com");
-
-    if (isGitHubPages) {
-      return "https://scibu-xp9w.vercel.app/api/import-users";
-    }
-
-    // En desarrollo local o Vercel, usar ruta relativa
-    return "/api/import-users";
-  };
-
-  // Función para procesar el CSV usando la API route
+  // Función para procesar el CSV
   const handleImport = async () => {
     if (!file) {
       toast.error("Por favor selecciona un archivo CSV");
@@ -156,53 +135,74 @@ export default function ImportUsersModal({
         return;
       }
 
-      const apiUrl = getImportApiUrl();
+      const total = users.length;
+      let success = 0;
+      let errors = 0;
+      const errorDetails: Array<{ email: string; error: string }> = [];
 
-      // Actualizar progreso inicial
-      setProgress(10);
+      // Procesar usuarios uno por uno
+      for (let i = 0; i < users.length; i++) {
+        const user = users[i];
+        setProgress(((i + 1) / total) * 100);
 
-      // Enviar usuarios a la API
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          users,
-          password: "123456",
-        }),
-      });
-
-      setProgress(90);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.message || errorData.error || `HTTP error! status: ${response.status}`;
-        
-        // Mensaje más descriptivo para errores de configuración
-        if (response.status === 500 && errorMessage.includes("Firebase Admin SDK")) {
-          throw new Error(
-            "El servidor no está configurado correctamente. " +
-            "Por favor, configura FIREBASE_SERVICE_ACCOUNT en las variables de entorno de Vercel. " +
-            "Consulta la documentación para más detalles."
-          );
+        try {
+          const result = await createUserFromCSV(user, "123456");
+          if (result.success) {
+            success++;
+          } else {
+            errors++;
+            errorDetails.push({
+              email: user.email,
+              error: result.error || "Error desconocido",
+            });
+          }
+        } catch (error: any) {
+          errors++;
+          errorDetails.push({
+            email: user.email,
+            error: error.message || "Error desconocido",
+          });
         }
-        
-        throw new Error(errorMessage);
+
+        // Pequeña pausa para no sobrecargar Firebase
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
-      const data = await response.json();
-      setProgress(100);
+      setResults({
+        total,
+        success,
+        errors,
+        errorDetails,
+      });
 
-      // Establecer resultados
-      setResults(data.results);
-
-      if (data.results.errors === 0) {
-        toast.success(`✅ ${data.results.success} usuarios importados exitosamente`);
+      if (errors === 0) {
+        toast.success(`✅ ${success} usuarios importados exitosamente`);
       } else {
         toast.warning(
-          `⚠️ ${data.results.success} usuarios importados, ${data.results.errors} errores`,
+          `⚠️ ${success} usuarios importados, ${errors} errores`,
         );
+      }
+
+      // Cerrar sesión al finalizar la importación (si se crearon usuarios)
+      if (success > 0) {
+        // Importar signOut desde firebase/auth
+        const { getAuth, signOut } = await import("firebase/auth");
+        const auth = getAuth();
+        
+        try {
+          await signOut(auth);
+          toast.info(
+            "Importación completada. Tu sesión se cerró. Por favor, vuelve a iniciar sesión.",
+            { duration: 5000 },
+          );
+          
+          // Redirigir al login después de un breve delay
+          setTimeout(() => {
+            window.location.href = "/auth/login";
+          }, 2000);
+        } catch (error) {
+          console.error("Error al cerrar sesión:", error);
+        }
       }
 
       if (onImportComplete) {
@@ -211,7 +211,6 @@ export default function ImportUsersModal({
     } catch (error: any) {
       console.error("Error processing CSV:", error);
       toast.error(`Error al procesar el CSV: ${error.message}`);
-      setProgress(0);
     } finally {
       setIsProcessing(false);
     }
@@ -243,40 +242,9 @@ TI,9876543210,María García,maria.garcia@example.com,20241002,Psicología`;
     }
   };
 
-  // Mantener el progreso al 100% cuando termine
-  useEffect(() => {
-    if (results && !isProcessing) {
-      setProgress(100);
-    }
-  }, [results, isProcessing]);
-
   return (
-    <>
-      {/* Overlay de carga para evitar pantalla en blanco */}
-      {isProcessing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="rounded-lg bg-white p-6 shadow-xl">
-            <div className="flex flex-col items-center gap-4">
-              <Icon
-                icon="ph:spinner"
-                className="h-8 w-8 animate-spin text-indigo-600"
-              />
-              <p className="text-sm font-medium text-gray-700">
-                Importando usuarios...
-              </p>
-              <div className="w-64">
-                <Progress value={progress} className="h-2" />
-                <p className="mt-2 text-center text-xs text-gray-500">
-                  {Math.round(progress)}% completado
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-[600px]">
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Importar Usuarios desde CSV</DialogTitle>
           <DialogDescription>
@@ -285,17 +253,18 @@ TI,9876543210,María García,maria.garcia@example.com,20241002,Psicología`;
           </DialogDescription>
         </DialogHeader>
 
-        {/* Información importante */}
-        <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+        {/* Advertencia importante */}
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
           <div className="flex items-start gap-2">
-            <Icon icon="ph:info" className="h-5 w-5 text-blue-600 mt-0.5" />
+            <Icon icon="ph:warning" className="h-5 w-5 text-amber-600 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-blue-900">
-                ℹ️ Información
+              <p className="text-sm font-semibold text-amber-900">
+                ⚠️ Advertencia Importante
               </p>
-              <p className="text-xs text-blue-800 mt-1">
-                Durante la importación, verás el progreso en tiempo real. 
-                La importación puede tomar unos minutos dependiendo de la cantidad de usuarios.
+              <p className="text-xs text-amber-800 mt-1">
+                Después de importar usuarios, tu sesión se cerrará automáticamente 
+                y deberás volver a iniciar sesión. Esto es necesario para crear 
+                las cuentas de los usuarios correctamente.
               </p>
             </div>
           </div>
@@ -349,28 +318,14 @@ TI,9876543210,María García,maria.garcia@example.com,20241002,Psicología`;
             )}
           </div>
 
-          {/* Progreso - Mantener visible incluso después de procesar */}
-          {(isProcessing || results) && (
-            <div className="space-y-2 rounded-lg border bg-gray-50 p-4">
-              <div className="flex items-center justify-between text-sm font-medium">
-                <span>
-                  {isProcessing
-                    ? "Procesando usuarios..."
-                    : "✅ Procesamiento completado"}
-                </span>
-                <span className="text-indigo-600">{Math.round(progress)}%</span>
+          {/* Progreso */}
+          {isProcessing && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span>Procesando usuarios...</span>
+                <span>{Math.round(progress)}%</span>
               </div>
-              <Progress value={progress} className="h-3" />
-              {isProcessing && (
-                <p className="text-xs text-gray-500">
-                  Por favor, espera mientras se importan los usuarios. No cierres esta ventana.
-                </p>
-              )}
-              {results && !isProcessing && (
-                <p className="text-xs text-green-600 font-medium">
-                  Importación finalizada. Puedes cerrar esta ventana.
-                </p>
-              )}
+              <Progress value={progress} />
             </div>
           )}
 
@@ -446,7 +401,6 @@ TI,9876543210,María García,maria.garcia@example.com,20241002,Psicología`;
         </div>
       </DialogContent>
     </Dialog>
-    </>
   );
 }
 
