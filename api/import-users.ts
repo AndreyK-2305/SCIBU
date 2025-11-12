@@ -73,7 +73,7 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ) {
-  // Configurar CORS headers
+  // Configurar CORS headers PRIMERO, antes de cualquier otra cosa
   const origin = req.headers.origin || "";
   const allowedOrigins = [
     "https://andreyk-2305.github.io",
@@ -91,10 +91,13 @@ export default async function handler(
 
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Max-Age", "86400"); // 24 horas
 
-  // Manejar preflight request
+  // Manejar preflight request - DEBE retornar con los headers ya configurados
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    res.status(200);
+    res.end();
+    return;
   }
 
   // Solo permitir POST
