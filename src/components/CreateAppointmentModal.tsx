@@ -329,6 +329,7 @@ export default function CreateAppointmentModal({
         disability: disability,
         reason: reason,
         status: "pendiente", // Agregar el estado pendiente por defecto
+        userId: user?.uid || undefined, // Agregar userId del usuario actual
       };
 
       // Create appointment

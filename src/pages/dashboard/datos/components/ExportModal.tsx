@@ -18,7 +18,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { db } from "@/lib/firebase";
-import { getAppointmentsByUserId } from "@/services/appointment";
+import {
+  getAllAppointments,
+  getAppointmentsByUserId,
+} from "@/services/appointment";
 import { getUserData, UserData } from "@/services/user";
 import { Appointment } from "@/types/appointment";
 
@@ -136,12 +139,52 @@ export default function ExportModal({ isOpen, onClose }: ExportModalProps) {
       }
 
       // Obtener citas del usuario
-      const allAppointments = await getAppointmentsByUserId(selectedUser.id);
+      // Intentar obtener por userId primero
+      let allAppointments = await getAppointmentsByUserId(selectedUser.id);
+
+      // Si no hay citas con userId, buscar por nombre del solicitante
+      // (algunas citas antiguas pueden no tener userId asignado)
+      if (allAppointments.length === 0) {
+        const allAppts = await getAllAppointments();
+        allAppointments = allAppts.filter(
+          (apt) =>
+            apt.requesterName?.toLowerCase().trim() ===
+              selectedUser.name.toLowerCase().trim() ||
+            apt.requesterName
+              ?.toLowerCase()
+              .includes(selectedUser.name.toLowerCase().trim()),
+        );
+      }
 
       // Filtrar citas por rango de fechas
+      // Normalizar fechas para comparar solo día, mes y año (sin hora)
+      const startDateNormalized = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate(),
+      );
+      
+      const endDateNormalized = new Date(
+        endDate.getFullYear(),
+        endDate.getMonth(),
+        endDate.getDate(),
+      );
+      // Incluir todo el día final (23:59:59)
+      endDateNormalized.setHours(23, 59, 59, 999);
+
       const filteredAppointments = allAppointments.filter((appointment) => {
         const appointmentDate = new Date(appointment.date);
-        return appointmentDate >= startDate && appointmentDate <= endDate;
+        // Normalizar la fecha de la cita (solo día, mes, año)
+        const appointmentDateNormalized = new Date(
+          appointmentDate.getFullYear(),
+          appointmentDate.getMonth(),
+          appointmentDate.getDate(),
+        );
+        
+        return (
+          appointmentDateNormalized >= startDateNormalized &&
+          appointmentDateNormalized <= endDateNormalized
+        );
       });
 
       // Generar PDF

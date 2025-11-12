@@ -173,10 +173,18 @@ export async function generateUserReportPDF(
     checkPageBreak(lineHeight * 2);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("No hay citas registradas en el rango de fechas seleccionado", margin, yPosition);
+    doc.text(
+      "No hay citas registradas en el rango de fechas seleccionado",
+      margin,
+      yPosition,
+    );
     yPosition += lineHeight * 2;
   } else {
-    appointments.forEach((appointment, index) => {
+    // Ordenar citas por fecha (más recientes primero)
+    const sortedAppointments = [...appointments].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+    sortedAppointments.forEach((appointment, index) => {
       checkPageBreak(40);
 
       // Separador entre citas
