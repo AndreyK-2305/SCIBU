@@ -31,7 +31,7 @@ function getApiUrl(): string {
       "⚠️ GitHub Pages detectado. Necesitas configurar VITE_API_URL con la URL de tu API de Vercel",
     );
     // Retornar una URL por defecto (debes configurarla)
-    return "/api/send-email"; // Esto fallará, pero al menos no romperá el build
+    return "https://scibu-xp9w.vercel.app/api/send-email"; // Esto fallará, pero al menos no romperá el build
   }
 
   // En Vercel o desarrollo local, usar ruta relativa
