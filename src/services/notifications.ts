@@ -1,3 +1,5 @@
+import { getAuth } from "firebase/auth";
+
 import { Appointment } from "@/types/appointment";
 import { getUserData } from "./user";
 
@@ -34,7 +36,16 @@ function getApiUrl(): string {
     return "https://scibu-xp9w.vercel.app/api/send-email"; // Esto fallará, pero al menos no romperá el build
   }
 
-  // En Vercel o desarrollo local, usar ruta relativa
+  // En desarrollo local, detectar si estamos en localhost
+  const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  
+  if (isLocalhost) {
+    // En desarrollo local, usar el proxy de Vite que redirige a localhost:3000
+    // O usar directamente la API de Vercel si el servidor proxy no está corriendo
+    return "/api/send-email";
+  }
+
+  // En Vercel, usar ruta relativa
   return "/api/send-email";
 }
 
@@ -63,9 +74,10 @@ async function sendEmailViaAPI(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.message || `HTTP error! status: ${response.status}`,
-      );
+      const errorMessage = errorData.message || errorData.error || `HTTP error! status: ${response.status}`;
+      const errorDetails = errorData.details ? ` Details: ${JSON.stringify(errorData.details)}` : "";
+      console.error("Error response from API:", errorData);
+      throw new Error(`${errorMessage}${errorDetails}`);
     }
 
     const data = await response.json();
@@ -77,16 +89,45 @@ async function sendEmailViaAPI(
 }
 
 /**
- * Obtiene el email del usuario desde Firestore
+ * Obtiene el email del usuario desde Firestore o Firebase Auth
  */
 async function getUserEmail(userId: string | undefined): Promise<string | null> {
   if (!userId) {
+    console.warn("getUserEmail: No se proporcionó userId");
     return null;
   }
 
   try {
+    // Primero intentar obtener el email de Firestore
+    console.log("getUserEmail: Intentando obtener email de Firestore para userId:", userId);
     const userData = await getUserData(userId);
-    return userData?.email || null;
+    console.log("getUserEmail: Datos del usuario obtenidos:", {
+      exists: !!userData,
+      email: userData?.email,
+      fullName: userData?.fullName,
+    });
+    
+    if (userData?.email) {
+      console.log("getUserEmail: Email encontrado en Firestore:", userData.email);
+      return userData.email;
+    }
+
+    // Si no se encuentra en Firestore, intentar obtenerlo de Firebase Auth
+    console.log("getUserEmail: Email no encontrado en Firestore, intentando Firebase Auth");
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    
+    // Si el userId coincide con el usuario actual, usar su email
+    if (currentUser && currentUser.uid === userId && currentUser.email) {
+      console.log("getUserEmail: Email encontrado en Firebase Auth:", currentUser.email);
+      return currentUser.email;
+    }
+
+    // Si no es el usuario actual, intentar buscar el usuario por ID
+    // Nota: Firebase Auth no permite buscar usuarios por ID directamente desde el cliente
+    // Por lo tanto, si no está en Firestore y no es el usuario actual, no podemos obtenerlo
+    console.warn("getUserEmail: No se pudo obtener el email para userId:", userId);
+    return null;
   } catch (error) {
     console.error("Error obteniendo email del usuario:", error);
     return null;
@@ -124,13 +165,28 @@ export async function sendAppointmentCreatedNotification(
   appointment: Appointment,
 ): Promise<void> {
   try {
+    console.log("sendAppointmentCreatedNotification: Appointment data:", {
+      id: appointment.id,
+      userId: appointment.userId,
+      requesterName: appointment.requesterName,
+    });
+
     const userEmail = await getUserEmail(appointment.userId);
 
     if (!userEmail) {
       console.warn(
-        "No se pudo obtener el email del usuario para enviar notificación",
+        "No se pudo obtener el email del usuario para enviar notificación. Appointment userId:",
+        appointment.userId,
       );
       return;
+    }
+
+    console.log("sendAppointmentCreatedNotification: Enviando email a:", userEmail);
+
+    // Validar que el email sea válido antes de enviar
+    if (!userEmail || !userEmail.includes("@")) {
+      console.error("Email inválido o vacío:", userEmail);
+      throw new Error(`Email inválido: ${userEmail}`);
     }
 
     const emailSubject = "Cita Agendada Exitosamente";

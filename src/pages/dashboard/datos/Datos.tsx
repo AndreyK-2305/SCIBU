@@ -14,10 +14,12 @@ import { getAllServices } from "@/services/service";
 import { getAllSpecialists } from "@/services/specialist";
 
 import ExportModal from "./components/ExportModal";
+import ImportUsersModal from "./components/ImportUsersModal";
 import UserList from "./components/UserList";
 
 export default function Datos() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [totalServices, setTotalServices] = useState<number>(0);
   const [totalSpecialists, setTotalSpecialists] = useState<number>(0);
   const [totalAppointments, setTotalAppointments] = useState<number>(0);
@@ -61,9 +63,17 @@ export default function Datos() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Datos del Sistema</h1>
-        <Button onClick={() => setIsExportModalOpen(true)}>
-          Exportar Datos
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsImportModalOpen(true)}
+          >
+            Importar Usuarios
+          </Button>
+          <Button onClick={() => setIsExportModalOpen(true)}>
+            Exportar Datos
+          </Button>
+        </div>
       </div>
 
       {/* Estadísticas del Sistema */}
@@ -114,6 +124,16 @@ export default function Datos() {
       <ExportModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
+      />
+
+      {/* Import Users Modal */}
+      <ImportUsersModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportComplete={() => {
+          // Recargar la lista de usuarios si es necesario
+          // El componente UserList se actualizará automáticamente
+        }}
       />
     </div>
   );

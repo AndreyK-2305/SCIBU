@@ -1,5 +1,5 @@
 import { FirebaseError } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword } from "firebase/auth";
 import {
   doc,
   getDoc,
@@ -217,5 +217,78 @@ export async function getAllUsers(): Promise<Array<UserData & { id: string }>> {
   } catch (error) {
     console.error("Error fetching all users:", error);
     return [];
+  }
+}
+
+// Interface para datos de usuario desde CSV
+export interface CSVUserData {
+  documentType: string; // CC, TI, etc.
+  documentNumber: string;
+  fullName: string;
+  email: string;
+  code: string;
+  program: string;
+}
+
+// Función para crear un usuario desde CSV
+// NOTA: Esta función autenticará temporalmente como el usuario creado
+// y luego cerrará sesión. Si hay un admin autenticado, perderá su sesión.
+export async function createUserFromCSV(
+  userData: CSVUserData,
+  password: string = "123456",
+): Promise<{ success: boolean; userId?: string; error?: string }> {
+  try {
+    const auth = getAuth();
+
+    // Crear el usuario en Firebase Auth
+    // Esto automáticamente autenticará como el nuevo usuario
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      userData.email,
+      password,
+    );
+
+    const userId = userCredential.user.uid;
+
+    // Crear los datos del usuario en Firestore
+    const now = Timestamp.now();
+    await setDoc(doc(db, "users", userId), {
+      email: userData.email,
+      fullName: userData.fullName,
+      documentType: userData.documentType,
+      documentNumber: userData.documentNumber,
+      code: userData.code,
+      program: userData.program,
+      status: "Estudiante", // Valor por defecto
+      birthDate: "",
+      phone: "",
+      gender: "",
+      populationGroups: [],
+      socialPrograms: [],
+      role: "beneficiario",
+      createdAt: now,
+      updatedAt: now,
+      isProfileComplete: false, // Perfil incompleto porque faltan campos requeridos
+    });
+
+    // NO cerrar sesión aquí - se cerrará al final de la importación completa
+    // Esto permite crear múltiples usuarios en secuencia
+
+    return { success: true, userId };
+  } catch (error: any) {
+    console.error("Error creating user from CSV:", error);
+    
+    // Si el usuario ya existe, retornar error específico
+    if (error.code === "auth/email-already-in-use") {
+      return {
+        success: false,
+        error: `El email ${userData.email} ya está registrado`,
+      };
+    }
+
+    return {
+      success: false,
+      error: error.message || "Error al crear el usuario",
+    };
   }
 }
