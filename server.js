@@ -54,18 +54,21 @@ app.post("/api/send-email", async (req, res) => {
     console.log("Sending email via Resend to:", to);
 
     // Enviar email usando Resend
-    const data = await resend.emails.send({
+    const result = await resend.emails.send({
       from: FROM_EMAIL,
       to: to,
       subject: subject,
       html: html,
     });
 
-    console.log("Email sent successfully:", data.id);
+    // La respuesta de Resend puede tener la estructura { data: { id: string } } o { id: string }
+    const emailId = result.data?.id || result.id || "unknown";
+
+    console.log("Email sent successfully:", emailId);
 
     return res.status(200).json({
       success: true,
-      id: data.id,
+      id: emailId,
     });
   } catch (error) {
     console.error("Error sending email:", error);

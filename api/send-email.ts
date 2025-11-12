@@ -3,7 +3,7 @@ import { Resend } from "resend";
 
 // API Key de Resend
 const RESEND_API_KEY = "re_PnBd8X6G_KzHQ1T4fRpuinBexHJeKzyWr";
-const FROM_EMAIL = "notificaciones@resend.dev";
+const FROM_EMAIL = "notificaciones@scibu.0025600.xyz";
 
 const resend = new Resend(RESEND_API_KEY);
 
@@ -72,18 +72,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log("Sending email via Resend to:", to);
 
     // Enviar email usando Resend
-    const data = await resend.emails.send({
+    const result = await resend.emails.send({
       from: FROM_EMAIL,
       to: to,
       subject: subject,
       html: html,
     });
 
-    console.log("Email sent successfully:", data.id);
+    // La respuesta de Resend puede tener la estructura { data: { id: string } } o { id: string }
+    const emailId = result.data?.id || (result as any).id || "unknown";
+
+    console.log("Email sent successfully:", emailId);
 
     return res.status(200).json({
       success: true,
-      id: data.id,
+      id: emailId,
     });
   } catch (error: any) {
     console.error("Error sending email:", error);
