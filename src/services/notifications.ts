@@ -10,8 +10,35 @@ import { getUserData } from "./user";
 
 // URL de la API
 // En desarrollo: usa el servidor proxy local (server.js)
-// En producción: usa la API route de Vercel automáticamente
-const API_URL = import.meta.env.VITE_API_URL || "/api/send-email";
+// En GitHub Pages: necesita una URL externa (Vercel)
+// En Vercel: usa la ruta relativa automáticamente
+function getApiUrl(): string {
+  // Si hay una variable de entorno configurada, usarla
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+
+  // Detectar si estamos en GitHub Pages
+  const isGitHubPages =
+    window.location.hostname.includes("github.io") ||
+    window.location.hostname.includes("github.com");
+
+  if (isGitHubPages) {
+    // Si estás en GitHub Pages, necesitas desplegar la API en Vercel
+    // y configurar VITE_API_URL con la URL de tu API de Vercel
+    // Ejemplo: "https://tu-proyecto-api.vercel.app/api/send-email"
+    console.warn(
+      "⚠️ GitHub Pages detectado. Necesitas configurar VITE_API_URL con la URL de tu API de Vercel",
+    );
+    // Retornar una URL por defecto (debes configurarla)
+    return "/api/send-email"; // Esto fallará, pero al menos no romperá el build
+  }
+
+  // En Vercel o desarrollo local, usar ruta relativa
+  return "/api/send-email";
+}
+
+const API_URL = getApiUrl();
 
 /**
  * Envía un email a través de la API route
