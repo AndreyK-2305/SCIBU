@@ -141,17 +141,44 @@ export default function Citas() {
 
     // Apply tab filter first (must always be applied)
     if (activeTab === "upcoming") {
-      filtered = filtered.filter(
-        (appointment) =>
-          appointment.date >= new Date() && appointment.status === "pendiente",
-      );
+      const now = new Date();
+      filtered = filtered.filter((appointment) => {
+        // Una cita es "próxima" si:
+        // 1. El estado es "pendiente" Y
+        // 2. La fecha es hoy o futura (comparar solo fecha, sin hora)
+        const appointmentDate = new Date(appointment.date);
+        const appointmentDateTime = new Date(
+          appointmentDate.getFullYear(),
+          appointmentDate.getMonth(),
+          appointmentDate.getDate(),
+        );
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        return (
+          appointment.status === "pendiente" &&
+          appointmentDateTime >= today
+        );
+      });
     } else if (activeTab === "past") {
-      filtered = filtered.filter(
-        (appointment) =>
-          appointment.date < new Date() ||
+      const now = new Date();
+      filtered = filtered.filter((appointment) => {
+        // Una cita es "pasada" si:
+        // 1. El estado es "realizado" o "cancelado" O
+        // 2. La fecha es anterior a hoy (comparar solo fecha, sin hora)
+        const appointmentDate = new Date(appointment.date);
+        const appointmentDateTime = new Date(
+          appointmentDate.getFullYear(),
+          appointmentDate.getMonth(),
+          appointmentDate.getDate(),
+        );
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        return (
           appointment.status === "realizado" ||
-          appointment.status === "cancelado",
-      );
+          appointment.status === "cancelado" ||
+          appointmentDateTime < today
+        );
+      });
     }
 
     // Filter by date if selected
