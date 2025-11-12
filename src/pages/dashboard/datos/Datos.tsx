@@ -9,16 +9,20 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+import ExportModal from "./components/ExportModal";
 import UserList from "./components/UserList";
 
 export default function Datos() {
   const [activeTab, setActiveTab] = useState<"system" | "users">("system");
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Datos del Sistema</h1>
-        <Button>Exportar Datos</Button>
+        <Button onClick={() => setIsExportModalOpen(true)}>
+          Exportar Datos
+        </Button>
       </div>
 
       <div className="border-b border-gray-200">
@@ -83,6 +87,12 @@ export default function Datos() {
       )}
 
       {activeTab === "users" && <UserList />}
+
+      {/* Export Modal */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+      />
     </div>
   );
 }
