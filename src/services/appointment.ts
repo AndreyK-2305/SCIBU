@@ -25,6 +25,11 @@ import {
   saveAppointmentsToStorage,
   updateAppointmentInStorage,
 } from "./localStorage";
+import {
+  sendAppointmentCreatedNotification,
+  sendAppointmentUpdatedNotification,
+  sendAppointmentDeletedNotification,
+} from "./notifications";
 
 const COLLECTION_NAME = "appointments";
 
@@ -45,6 +50,7 @@ const convertAppointmentDoc = (doc: any): Appointment => {
     disability: data.disability || false,
     reason: data.reason || "",
     recommendations: data.recommendations || "",
+    userId: data.userId || "",
     createdAt: data.createdAt?.toDate() || new Date(),
     updatedAt: data.updatedAt?.toDate() || new Date(),
   };
@@ -237,6 +243,9 @@ export const updateAppointment = async (
   appointmentData: Partial<Omit<Appointment, "id" | "createdAt" | "updatedAt">>,
 ): Promise<void> => {
   try {
+    // Obtener la cita actual antes de actualizarla para la notificación
+    const currentAppointment = await getAppointmentById(id);
+
     const updateData: any = {
       ...appointmentData,
       updatedAt: Timestamp.now(),
@@ -248,6 +257,22 @@ export const updateAppointment = async (
     }
 
     await updateDoc(doc(db, COLLECTION_NAME, id), updateData);
+
+    // Enviar notificación de actualización
+    if (currentAppointment) {
+      const updatedAppointment: Appointment = {
+        ...currentAppointment,
+        ...appointmentData,
+        date: appointmentData.date || currentAppointment.date,
+        time: appointmentData.time || currentAppointment.time,
+        updatedAt: new Date(),
+      };
+
+      await sendAppointmentUpdatedNotification(updatedAppointment, {
+        date: appointmentData.date,
+        time: appointmentData.time,
+      });
+    }
   } catch (error) {
     console.error("Error updating appointment:", error);
     throw error;
@@ -261,6 +286,9 @@ export const updateAppointmentStatus = async (
   recommendations?: string,
 ): Promise<void> => {
   try {
+    // Obtener la cita actual antes de actualizarla para la notificación
+    const currentAppointment = await getAppointmentById(id);
+
     const updateData: any = {
       status,
       updatedAt: Timestamp.now(),
@@ -271,6 +299,20 @@ export const updateAppointmentStatus = async (
     }
 
     await updateDoc(doc(db, COLLECTION_NAME, id), updateData);
+
+    // Enviar notificación de actualización
+    if (currentAppointment) {
+      const updatedAppointment: Appointment = {
+        ...currentAppointment,
+        status,
+        recommendations: recommendations || currentAppointment.recommendations,
+        updatedAt: new Date(),
+      };
+
+      await sendAppointmentUpdatedNotification(updatedAppointment, {
+        status,
+      });
+    }
   } catch (error) {
     console.error("Error updating appointment status:", error);
     throw error;
@@ -280,7 +322,15 @@ export const updateAppointmentStatus = async (
 // Delete appointment
 export const deleteAppointment = async (id: string): Promise<void> => {
   try {
+    // Obtener la cita antes de eliminarla para enviar la notificación
+    const appointment = await getAppointmentById(id);
+
     await deleteDoc(doc(db, COLLECTION_NAME, id));
+
+    // Enviar notificación de eliminación
+    if (appointment) {
+      await sendAppointmentDeletedNotification(appointment);
+    }
   } catch (error) {
     console.error("Error deleting appointment:", error);
     throw error;
@@ -304,12 +354,17 @@ export const createAppointment = async (
       appointmentData,
     );
 
-    return {
+    const newAppointment: Appointment = {
       ...appointment,
       id: docRef.id,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
+
+    // Enviar notificación de creación
+    await sendAppointmentCreatedNotification(newAppointment);
+
+    return newAppointment;
   } catch (error) {
     console.error("Error creating appointment:", error);
     throw error;
