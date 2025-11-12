@@ -163,7 +163,7 @@ export default function Citas() {
       const now = new Date();
       filtered = filtered.filter((appointment) => {
         // Una cita es "pasada" si:
-        // 1. El estado es "realizado" o "cancelado" O
+        // 1. El estado es "realizado", "cancelado" o "vencido" O
         // 2. La fecha es anterior a hoy (comparar solo fecha, sin hora)
         const appointmentDate = new Date(appointment.date);
         const appointmentDateTime = new Date(
@@ -176,6 +176,7 @@ export default function Citas() {
         return (
           appointment.status === "realizado" ||
           appointment.status === "cancelado" ||
+          appointment.status === "vencido" ||
           appointmentDateTime < today
         );
       });
@@ -309,6 +310,8 @@ export default function Citas() {
         return "Realizada";
       case "cancelado":
         return "Cancelada";
+      case "vencido":
+        return "Vencida";
       default:
         return status;
     }
@@ -323,6 +326,8 @@ export default function Citas() {
         return "bg-green-500";
       case "cancelado":
         return "bg-red-500";
+      case "vencido":
+        return "bg-gray-600";
       default:
         return "bg-gray-500";
     }
@@ -384,6 +389,7 @@ export default function Citas() {
                   <SelectItem value="pendiente">Pendiente</SelectItem>
                   <SelectItem value="realizado">Realizada</SelectItem>
                   <SelectItem value="cancelado">Cancelada</SelectItem>
+                  <SelectItem value="vencido">Vencida</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -629,9 +635,9 @@ function AppointmentCard({
       </div>
 
       {/* Action buttons */}
-      {(status === "pendiente" || isAdmin) && (
+      {(status === "pendiente" || status === "vencido" || isAdmin) && (
         <div className="mt-4 flex justify-end space-x-2">
-          {status === "pendiente" && (
+          {(status === "pendiente" || status === "vencido") && (
             <Button
               variant="outline"
               onClick={() => onReschedule(appointment)}
@@ -647,7 +653,7 @@ function AppointmentCard({
           >
             {isAdmin
               ? "Actualizar estado"
-              : status === "pendiente"
+              : status === "pendiente" || status === "vencido"
                 ? "Cancelar cita"
                 : "Ver detalles"}
           </Button>
@@ -666,6 +672,8 @@ const getStatusLabel = (status: AppointmentStatus): string => {
       return "Realizada";
     case "cancelado":
       return "Cancelada";
+    case "vencido":
+      return "Vencida";
     default:
       return status;
   }
@@ -680,6 +688,8 @@ const getStatusColor = (status: AppointmentStatus): string => {
       return "bg-green-500";
     case "cancelado":
       return "bg-red-500";
+    case "vencido":
+      return "bg-gray-600";
     default:
       return "bg-gray-500";
   }

@@ -35,7 +35,7 @@ interface Appointment {
   isFirstTime: boolean;
   reason: string;
   recommendations?: string;
-  status: "pendiente" | "realizado" | "cancelado";
+  status: "pendiente" | "realizado" | "cancelado" | "vencido";
 }
 
 interface UserDetails {
@@ -194,7 +194,7 @@ export default function UserList() {
           isFirstTime: appointment.isFirstTime,
           reason: appointment.reason || "",
           recommendations: appointment.recommendations,
-          status: appointment.status as "pendiente" | "realizado" | "cancelado",
+          status: appointment.status as "pendiente" | "realizado" | "cancelado" | "vencido",
         }),
       );
 
@@ -234,6 +234,8 @@ export default function UserList() {
         return "bg-green-500";
       case "cancelado":
         return "bg-red-500";
+      case "vencido":
+        return "bg-gray-600";
       default:
         return "bg-gray-500";
     }
@@ -247,6 +249,8 @@ export default function UserList() {
         return "Realizada";
       case "cancelado":
         return "Cancelada";
+      case "vencido":
+        return "Vencida";
       default:
         return "Desconocido";
     }

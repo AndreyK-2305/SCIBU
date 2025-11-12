@@ -284,6 +284,8 @@ function getStatusText(status: string): string {
       return "Realizada";
     case "cancelado":
       return "Cancelada";
+    case "vencido":
+      return "Vencida";
     default:
       return status;
   }
