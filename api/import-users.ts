@@ -73,7 +73,7 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ) {
-  // Configurar CORS headers PRIMERO, antes de cualquier otra cosa
+  // Configurar CORS headers (igual que send-email.ts)
   const origin = req.headers.origin || "";
   const allowedOrigins = [
     "https://andreyk-2305.github.io",
@@ -91,13 +91,10 @@ export default async function handler(
 
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Access-Control-Max-Age", "86400"); // 24 horas
 
-  // Manejar preflight request - DEBE retornar con los headers ya configurados
+  // Manejar preflight request
   if (req.method === "OPTIONS") {
-    res.status(200);
-    res.end();
-    return;
+    return res.status(200).end();
   }
 
   // Solo permitir POST
@@ -106,6 +103,23 @@ export default async function handler(
   }
 
   try {
+    // Inicializar Firebase Admin si no está inicializado (después de configurar CORS)
+    if (!adminInitialized && !admin.apps.length) {
+      // Intentar inicializar nuevamente (por si acaso)
+      const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+      if (serviceAccount) {
+        try {
+          const credentials = JSON.parse(serviceAccount);
+          admin.initializeApp({
+            credential: admin.credential.cert(credentials),
+          });
+          adminInitialized = true;
+        } catch (error) {
+          console.error("Error initializing Firebase Admin in handler:", error);
+        }
+      }
+    }
+
     // Verificar que Firebase Admin esté inicializado
     if (!adminInitialized || !admin.apps.length) {
       console.error("Firebase Admin SDK no está inicializado");
