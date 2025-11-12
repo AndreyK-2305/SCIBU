@@ -2,17 +2,11 @@ import { Icon } from "@iconify/react";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import useAuth from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { getUserData } from "@/services/user";
 
 import { Button } from "./ui/button";
-import { Separator } from "./ui/separator";
 
 interface NavItem {
   label: string;
@@ -82,11 +76,12 @@ export default function UserSidebar() {
 
       <aside
         className={cn(
-          "fixed top-0 left-0 z-10 w-full space-y-10 overflow-hidden bg-[#3730a3] p-3 text-white transition-[height] lg:min-h-screen lg:transition-[width]",
+          "fixed top-0 left-0 z-10 flex w-full flex-col overflow-hidden bg-[#3730a3] p-3 text-white transition-[height] lg:min-h-screen lg:transition-[width]",
           collapsed && "h-16 lg:w-16",
           !collapsed && "h-screen lg:w-64",
         )}
       >
+        {/* Header con menú y usuario */}
         <div className="flex items-center justify-between">
           <Button
             variant="ghost"
@@ -96,28 +91,24 @@ export default function UserSidebar() {
             <Icon icon="mdi:menu" className="size-6" />
           </Button>
 
-          <Popover>
-            <PopoverTrigger
-              className={cn(
-                "cursor-pointer transition-opacity",
-                collapsed && "lg:opacity-0",
-              )}
-            >
+          {/* Usuario en la parte superior */}
+          {!collapsed && (
+            <div className="flex items-center gap-2">
               <Icon icon="mingcute:user-4-fill" className="size-6" />
-            </PopoverTrigger>
-            <PopoverContent className="w-fit">
-              <p className="text-center font-bold">Usuario</p>
-              <p className="text-center text-sm">{userName}</p>
-              <Separator className="my-4" />
-              <Button variant="outline" onClick={logout}>
-                Cerrar Sesión
-              </Button>
-            </PopoverContent>
-          </Popover>
+              <div className="flex flex-col">
+                <p className="text-xs font-bold">Usuario</p>
+                <p className="text-xs opacity-80 truncate max-w-[120px]">
+                  {userName}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
-        <nav className="flex h-full flex-col items-start gap-4 overflow-y-auto">
+
+        {/* Navegación en el medio */}
+        <nav className="flex flex-1 flex-col items-start gap-4 overflow-y-auto py-4">
           {navItems.map((item, index) => (
-            <Link to={item.url} key={index}>
+            <Link to={item.url} key={index} className="w-full">
               <Button
                 variant="ghost"
                 className={cn(
@@ -142,6 +133,20 @@ export default function UserSidebar() {
             </Link>
           ))}
         </nav>
+
+        {/* Botón de cerrar sesión en la parte inferior */}
+        {!collapsed && (
+          <div className="mt-auto border-t border-indigo-400/20 pt-4">
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-white hover:bg-indigo-700"
+              onClick={logout}
+            >
+              <Icon icon="material-symbols:logout" className="ml-[6px] size-6" />
+              <span className="mr-[6px]">Cerrar Sesión</span>
+            </Button>
+          </div>
+        )}
       </aside>
     </>
   );
