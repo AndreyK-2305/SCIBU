@@ -25,7 +25,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import useAuth from "@/hooks/useAuth";
-import { createAppointment } from "@/services/appointment";
+import {
+  createAppointment,
+  getOccupiedTimeSlots,
+} from "@/services/appointment";
 import {
   getScheduleById,
   getSchedulesBySpecialistId,
@@ -216,12 +219,23 @@ export default function CreateAppointmentModal({
       // Remove duplicates and sort
       const uniqueTimeSlots = [...new Set(timeSlots)].sort();
 
-      setAvailableTimeSlots(uniqueTimeSlots);
+      // Get occupied time slots for this date and specialist
+      const occupiedTimeSlots = await getOccupiedTimeSlots(
+        date,
+        selectedSpecialist,
+      );
+
+      // Filter out occupied time slots
+      const availableTimeSlots = uniqueTimeSlots.filter(
+        (slot) => !occupiedTimeSlots.includes(slot),
+      );
+
+      setAvailableTimeSlots(availableTimeSlots);
 
       // Select the first time slot by default if available
-      if (uniqueTimeSlots.length > 0 && !selectedTime) {
-        setSelectedTime(uniqueTimeSlots[0]);
-      } else if (uniqueTimeSlots.length === 0) {
+      if (availableTimeSlots.length > 0 && !selectedTime) {
+        setSelectedTime(availableTimeSlots[0]);
+      } else if (availableTimeSlots.length === 0) {
         // Reset selected time if no slots are available
         setSelectedTime("");
       }

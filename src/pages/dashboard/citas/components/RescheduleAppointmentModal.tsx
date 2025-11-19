@@ -16,7 +16,10 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { updateAppointment } from "@/services/appointment";
+import {
+  getOccupiedTimeSlots,
+  updateAppointment,
+} from "@/services/appointment";
 import { getSchedulesBySpecialistId } from "@/services/schedule";
 import { Appointment } from "@/types/appointment";
 import { Schedule } from "@/types/schedule";
@@ -66,55 +69,77 @@ export default function RescheduleAppointmentModal({
 
   // Update available times when date changes
   useEffect(() => {
-    if (!selectedDate || availableSchedules.length === 0) {
-      setAvailableTimes([]);
-      return;
-    }
-
-    // Filter schedules for the selected date
-    const dateSchedules = availableSchedules.filter((schedule) => {
-      const scheduleDate = new Date(schedule.date);
-      return (
-        scheduleDate.getDate() === selectedDate.getDate() &&
-        scheduleDate.getMonth() === selectedDate.getMonth() &&
-        scheduleDate.getFullYear() === selectedDate.getFullYear()
-      );
-    });
-
-    if (dateSchedules.length === 0) {
-      setAvailableTimes([]);
-      return;
-    }
-
-    // Generate available time slots
-    const times: string[] = [];
-
-    dateSchedules.forEach((schedule) => {
-      // Generate time slots in 1-hour increments
-      const [startHour, startMinute] = schedule.startTime
-        .split(":")
-        .map(Number);
-      const [endHour, endMinute] = schedule.endTime.split(":").map(Number);
-
-      const startDate = new Date();
-      startDate.setHours(startHour, startMinute, 0);
-
-      const endDate = new Date();
-      endDate.setHours(endHour, endMinute, 0);
-
-      // Create slots in 1-hour increments
-      const currentSlot = new Date(startDate);
-      while (currentSlot < endDate) {
-        const formattedTime = format(currentSlot, "h:mm a");
-        times.push(formattedTime);
-
-        // Add one hour
-        currentSlot.setTime(currentSlot.getTime() + 60 * 60 * 1000);
+    const loadAvailableTimes = async () => {
+      if (
+        !selectedDate ||
+        availableSchedules.length === 0 ||
+        !appointment?.specialistId
+      ) {
+        setAvailableTimes([]);
+        return;
       }
-    });
 
-    setAvailableTimes([...new Set(times)].sort());
-  }, [selectedDate, availableSchedules]);
+      // Filter schedules for the selected date
+      const dateSchedules = availableSchedules.filter((schedule) => {
+        const scheduleDate = new Date(schedule.date);
+        return (
+          scheduleDate.getDate() === selectedDate.getDate() &&
+          scheduleDate.getMonth() === selectedDate.getMonth() &&
+          scheduleDate.getFullYear() === selectedDate.getFullYear()
+        );
+      });
+
+      if (dateSchedules.length === 0) {
+        setAvailableTimes([]);
+        return;
+      }
+
+      // Generate available time slots
+      const times: string[] = [];
+
+      dateSchedules.forEach((schedule) => {
+        // Generate time slots in 1-hour increments
+        const [startHour, startMinute] = schedule.startTime
+          .split(":")
+          .map(Number);
+        const [endHour, endMinute] = schedule.endTime.split(":").map(Number);
+
+        const startDate = new Date();
+        startDate.setHours(startHour, startMinute, 0);
+
+        const endDate = new Date();
+        endDate.setHours(endHour, endMinute, 0);
+
+        // Create slots in 1-hour increments
+        const currentSlot = new Date(startDate);
+        while (currentSlot < endDate) {
+          const formattedTime = format(currentSlot, "h:mm a");
+          times.push(formattedTime);
+
+          // Add one hour
+          currentSlot.setTime(currentSlot.getTime() + 60 * 60 * 1000);
+        }
+      });
+
+      // Get occupied time slots for this date and specialist
+      // Exclude the current appointment being rescheduled
+      const occupiedTimeSlots = await getOccupiedTimeSlots(
+        selectedDate,
+        appointment.specialistId,
+        appointment.id, // Exclude current appointment
+        "h:mm a", // Return in h:mm a format to match generated times
+      );
+
+      // Filter out occupied time slots
+      const availableTimes = times.filter(
+        (time) => !occupiedTimeSlots.includes(time),
+      );
+
+      setAvailableTimes([...new Set(availableTimes)].sort());
+    };
+
+    loadAvailableTimes();
+  }, [selectedDate, availableSchedules, appointment]);
 
   // Handle date selection
   const handleDateSelect = (date: Date | undefined) => {

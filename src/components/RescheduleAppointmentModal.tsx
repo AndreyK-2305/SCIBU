@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { getOccupiedTimeSlots } from "@/services/appointment";
 import { getSchedulesByDate } from "@/services/schedule";
 import { Appointment } from "@/types/appointment";
 import { Schedule } from "@/types/schedule";
@@ -84,17 +85,18 @@ export default function RescheduleAppointmentModal({
     try {
       setLoading(true);
 
+      if (!appointment?.specialistId) {
+        setAvailableTimeSlots([]);
+        return;
+      }
+
       // Get all schedules for this date
       const schedules = await getSchedulesByDate(date);
 
       // Generate time slots from schedule start and end times
       const timeSlots = schedules.reduce(
         (slots: string[], schedule: Schedule) => {
-          if (
-            // If the appointment is for a specific specialist, only show their slots
-            !appointment?.specialistId ||
-            schedule.specialistId === appointment.specialistId
-          ) {
+          if (schedule.specialistId === appointment.specialistId) {
             // Generate time slots based on start and end times
             const generatedSlots = generateTimeSlots(
               schedule.startTime,
@@ -110,12 +112,26 @@ export default function RescheduleAppointmentModal({
       // Remove duplicates and sort
       const uniqueTimeSlots = [...new Set(timeSlots)].sort();
 
-      setAvailableTimeSlots(uniqueTimeSlots);
+      // Get occupied time slots for this date and specialist
+      // Exclude the current appointment being rescheduled
+      const occupiedTimeSlots = await getOccupiedTimeSlots(
+        date,
+        appointment.specialistId,
+        appointment.id, // Exclude current appointment
+        "HH:mm", // Return in HH:mm format to match generated slots
+      );
+
+      // Filter out occupied time slots
+      const availableTimeSlots = uniqueTimeSlots.filter(
+        (slot) => !occupiedTimeSlots.includes(slot),
+      );
+
+      setAvailableTimeSlots(availableTimeSlots);
 
       // Select the first time slot by default if available
-      if (uniqueTimeSlots.length > 0 && !selectedTime) {
-        setSelectedTime(uniqueTimeSlots[0]);
-      } else if (uniqueTimeSlots.length === 0) {
+      if (availableTimeSlots.length > 0 && !selectedTime) {
+        setSelectedTime(availableTimeSlots[0]);
+      } else if (availableTimeSlots.length === 0) {
         // Reset selected time if no slots are available
         setSelectedTime("");
       }

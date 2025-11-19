@@ -46,7 +46,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import useAuth from "@/hooks/useAuth";
-import { createAppointment } from "@/services/appointment";
+import {
+  createAppointment,
+  getOccupiedTimeSlots,
+} from "@/services/appointment";
 import {
   getAllSchedules,
   getSchedulesBySpecialistId,
@@ -250,46 +253,63 @@ export default function AppointmentForm({
 
   // Generate time options based on selected date and specialist schedules
   useEffect(() => {
-    if (selectedDate && availableSchedules.length > 0) {
-      // Filter schedules for the selected date
-      const dateSchedules = availableSchedules.filter((schedule) => {
-        const scheduleDate = new Date(schedule.date);
-        return (
-          scheduleDate.getDate() === selectedDate.getDate() &&
-          scheduleDate.getMonth() === selectedDate.getMonth() &&
-          scheduleDate.getFullYear() === selectedDate.getFullYear()
-        );
-      });
-
-      // Generate time slots from schedules
-      const times: string[] = [];
-      dateSchedules.forEach((schedule) => {
-        const startTime = parse(schedule.startTime, "HH:mm", new Date());
-        const endTime = parse(schedule.endTime, "HH:mm", new Date());
-
-        // Generate 20-minute slots (changed from 30 minutes)
-        let currentSlot = startTime;
-        while (currentSlot < endTime) {
-          const formattedTime = format(currentSlot, "h:mm a");
-          times.push(formattedTime);
-
-          // Add 20 minutes for next slot
-          currentSlot = new Date(currentSlot.getTime() + 20 * 60000);
-        }
-      });
-
-      setTimeOptions(
-        [...new Set(times)].sort((a, b) => {
+    const loadTimeOptions = async () => {
+      if (selectedDate && availableSchedules.length > 0 && selectedSpecialist) {
+        // Filter schedules for the selected date
+        const dateSchedules = availableSchedules.filter((schedule) => {
+          const scheduleDate = new Date(schedule.date);
           return (
-            parse(a, "h:mm a", new Date()).getTime() -
-            parse(b, "h:mm a", new Date()).getTime()
+            scheduleDate.getDate() === selectedDate.getDate() &&
+            scheduleDate.getMonth() === selectedDate.getMonth() &&
+            scheduleDate.getFullYear() === selectedDate.getFullYear()
           );
-        }),
-      );
-    } else {
-      setTimeOptions([]);
-    }
-  }, [selectedDate, availableSchedules]);
+        });
+
+        // Generate time slots from schedules
+        const times: string[] = [];
+        dateSchedules.forEach((schedule) => {
+          const startTime = parse(schedule.startTime, "HH:mm", new Date());
+          const endTime = parse(schedule.endTime, "HH:mm", new Date());
+
+          // Generate 20-minute slots (changed from 30 minutes)
+          let currentSlot = startTime;
+          while (currentSlot < endTime) {
+            const formattedTime = format(currentSlot, "h:mm a");
+            times.push(formattedTime);
+
+            // Add 20 minutes for next slot
+            currentSlot = new Date(currentSlot.getTime() + 20 * 60000);
+          }
+        });
+
+        // Get occupied time slots for this date and specialist
+        const occupiedTimeSlots = await getOccupiedTimeSlots(
+          selectedDate,
+          selectedSpecialist,
+          undefined,
+          "h:mm a", // Return in h:mm a format to match the generated times
+        );
+
+        // Filter out occupied time slots
+        const availableTimes = times.filter(
+          (time) => !occupiedTimeSlots.includes(time),
+        );
+
+        setTimeOptions(
+          [...new Set(availableTimes)].sort((a, b) => {
+            return (
+              parse(a, "h:mm a", new Date()).getTime() -
+              parse(b, "h:mm a", new Date()).getTime()
+            );
+          }),
+        );
+      } else {
+        setTimeOptions([]);
+      }
+    };
+
+    loadTimeOptions();
+  }, [selectedDate, availableSchedules, selectedSpecialist]);
 
   // Initialize form
   const form = useForm<AppointmentFormData>({
